@@ -1,0 +1,6 @@
+
+.env
+.env.example
+/.next
+.env.example
+/node_modules

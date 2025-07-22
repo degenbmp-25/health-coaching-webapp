@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  clerkId       String    @unique @map("clerk_id")
+  name          String?
+  email         String    @unique
+  image         String?
+  role          String    @default("user") // Possible values: "user", "coach"
+  createdAt     DateTime  @default(now()) @map(name: "created_at")
+  updatedAt     DateTime  @updatedAt @map(name: "updated_at")
+  
+  // Email notification preferences
+  emailNotificationsEnabled Boolean @default(true) @map(name: "email_notifications_enabled")
+  notificationTime          String  @default("07:00") @map(name: "notification_time") // Time in HH:MM format
+  timezone                  String  @default("UTC") @map(name: "timezone")
+  
+  meals         Meal[]
+  workouts      Workout[]
+  activities    Activity[]
+  sentMessages     Message[]  @relation("SentMessages")
+  receivedMessages Message[]  @relation("ReceivedMessages")
+  conversations    Conversation[]
+  customExercises Exercise[]
+  goals         Goal[]
+  emailNotifications EmailNotification[]
+  
+  // Coach-student relationship
+  coachId      String?   @map(name: "coach_id")
+  coach        User?     @relation("CoachToStudents", fields: [coachId], references: [id], onDelete: SetNull)
+  students     User[]    @relation("CoachToStudents")
+  
+  @@map(name: "users")
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  targetDate  DateTime?
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map(name: "created_at")
+  updatedAt   DateTime @updatedAt @map(name: "updated_at")
+  
+  // User who owns this goal
+  userId      String   @map(name: "user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Coach can edit student's goals
+  lastEditedByCoach Boolean @default(false) @map(name: "last_edited_by_coach")
+  
+  @@map(name: "goals")
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  userId      String   @map(name: "user_id")
+  name        String
+  description String?
+  colorCode   String   @map(name: "color_code")
+  createdAt   DateTime @default(now()) @map(name: "created_at")
+  updatedAt   DateTime @updatedAt @map(name: "updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  activityLogs ActivityLog[]
+
+  @@map(name: "activities")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  activityId String   @map(name: "activity_id")
+  date       DateTime @default(now())
+  count      Int      @default(1)
+
+  activity Activity @relation(fields: [activityId], references: [id])
+
+  @@map(name: "activity_log")
+}
+
+model Meal {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?  @map("image_url")
+  calories    Int
+  protein     Float
+  carbs       Float
+  fat         Float
+  date        DateTime @default(now())
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map(name: "meals")
+}
+
+model Workout {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  exercises WorkoutExercise[]
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map(name: "workouts")
+}
+
+model Exercise {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  muscleGroup String   @map("muscle_group")
+  equipment   String?
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workoutExercises WorkoutExercise[]
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map(name: "exercises")
+}
+
+model WorkoutExercise {
+  id         String   @id @default(cuid())
+  workoutId  String   @map("workout_id")
+  exerciseId String   @map("exercise_id")
+  sets       Int
+  reps       Int
+  weight     Float?
+  duration   Int?     // Duration in seconds
+  notes      String?
+  order      Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id])
+
+  @@map(name: "workout_exercises")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  imageUrl  String?  @map("image_url")
+  createdAt DateTime @default(now()) @map(name: "created_at")
+  updatedAt DateTime @updatedAt @map(name: "updated_at")
+  
+  // Relations
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map(name: "messages")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map(name: "created_at")
+  updatedAt DateTime @updatedAt @map(name: "updated_at")
+  
+  // Relations
+  participants User[]
+  messages     Message[]
+
+  @@map(name: "conversations")
+}
+
+model EmailNotification {
+  id        String   @id @default(cuid())
+  type      String   // "daily_reminder" or "coach_message"
+  subject   String
+  content   String   @db.Text
+  sentAt    DateTime @default(now()) @map(name: "sent_at")
+  status    String   @default("sent") // "sent", "failed", "pending"
+  metadata  Json?    // Additional data like goals included, coach message details
+  
+  // Relations
+  userId    String   @map(name: "user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map(name: "email_notifications")
+}
+
