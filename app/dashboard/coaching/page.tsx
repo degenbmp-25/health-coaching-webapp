@@ -7,6 +7,7 @@ import { CoachStudents } from "@/components/coach/CoachStudents"
 import { CoachSelector } from "@/components/coach/CoachSelector"
 import { StudentDataDashboard } from "@/components/coach/StudentDataDashboard"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 import { 
   Card, 
   CardHeader, 
@@ -27,11 +28,13 @@ interface Student {
 
 export default function CoachingPage() {
   const { user } = useUser()
+  const { toast } = useToast()
   const [showCoachSearch, setShowCoachSearch] = useState(false)
   const [isBecomingCoach, setIsBecomingCoach] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("student")
   const [hasCoach, setHasCoach] = useState<boolean>(false)
   const [students, setStudents] = useState<Student[]>([])
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   
   useEffect(() => {
@@ -74,6 +77,8 @@ export default function CoachingPage() {
   const handleCoachSelected = () => {
     setShowCoachSearch(false)
     setHasCoach(true)
+    // Trigger a refresh in UserCoach component
+    setRefreshTrigger(prev => prev + 1)
   }
 
   const becomeCoach = async () => {
@@ -88,14 +93,28 @@ export default function CoachingPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to become a coach")
+        const errorText = await response.text()
+        throw new Error(errorText || "Failed to become a coach")
       }
 
-      // Update the session instead of reloading the page
-      // await update({ role: "coach" }) // This line was removed as per the edit hint
-      setIsBecomingCoach(false)
+      const updatedUser = await response.json()
+      
+      toast({
+        title: "Success!",
+        description: "You are now a coach. The page will reload to update your permissions.",
+      })
+      
+      // Reload the page after a short delay to allow the toast to show
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
     } catch (error) {
       console.error("Error becoming a coach:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to become a coach. Please try again.",
+      })
       setIsBecomingCoach(false)
     }
   }
@@ -124,7 +143,7 @@ export default function CoachingPage() {
         </TabsList>
         
         <TabsContent value="student" className="space-y-4">
-          <UserCoach userId={userId} onHasCoach={setHasCoach} />
+          <UserCoach userId={userId} onHasCoach={setHasCoach} refreshTrigger={refreshTrigger} />
           
           {!showCoachSearch && !hasCoach && (
             <div className="flex justify-center mt-4">

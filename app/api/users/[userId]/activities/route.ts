@@ -15,16 +15,30 @@ export async function GET(
       return user
     }
 
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Check if user is accessing their own activities or if they're a coach accessing student's activities
     let hasAccess = false
 
-    if (user.id === params.userId) {
+    if (user.clerkId === params.userId) {
       hasAccess = true
     } else if (user.role === "coach") {
       // Check if the requested user is one of their students
       const student = await db.user.findFirst({
         where: {
-          id: params.userId,
+          id: targetUser.id,
           coachId: user.id,
         },
       })
@@ -37,7 +51,7 @@ export async function GET(
 
     const activities = await db.activity.findMany({
       where: {
-        userId: params.userId,
+        userId: targetUser.id,
       },
       include: {
         activityLogs: {
@@ -68,16 +82,30 @@ export async function POST(
       return user
     }
 
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Check if user is creating for themselves or if they're a coach creating for their student
     let hasAccess = false
 
-    if (user.id === params.userId) {
+    if (user.clerkId === params.userId) {
       hasAccess = true
     } else if (user.role === "coach") {
       // Check if the requested user is one of their students
       const student = await db.user.findFirst({
         where: {
-          id: params.userId,
+          id: targetUser.id,
           coachId: user.id,
         },
       })
@@ -96,7 +124,7 @@ export async function POST(
         name,
         description,
         colorCode,
-        userId: params.userId,
+        userId: targetUser.id,
       },
     })
 

@@ -34,15 +34,27 @@ export async function GET(
 
     console.log(`[USER_WORKOUTS_GET] Session user: ${currentUser.id}, role: ${currentUser.role}`)
     
-    const userId = params.userId
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
     
     // If the user is looking at their own workouts
-    if (currentUser.id === userId) {
+    if (currentUser.clerkId === params.userId) {
       console.log("[USER_WORKOUTS_GET] User requesting their own workouts")
       
       const workouts = await db.workout.findMany({
         where: {
-          userId: userId,
+          userId: targetUser.id,
         },
         include: {
           exercises: {
@@ -68,7 +80,7 @@ export async function GET(
     
     const student = await db.user.findFirst({
       where: {
-        id: userId,
+        id: targetUser.id,
         coachId: currentUser.id,
       },
     })
@@ -82,7 +94,7 @@ export async function GET(
     
     const workouts = await db.workout.findMany({
       where: {
-        userId: userId,
+        userId: targetUser.id,
       },
       include: {
         exercises: {
@@ -123,14 +135,26 @@ export async function POST(
     if (authRes instanceof NextResponse) return authRes;
     const currentUser = authRes;
 
-    const userId = params.userId
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
     
     // Check if it's the user creating their own workout or if it's their coach
-    if (currentUser.id !== userId) {
+    if (currentUser.clerkId !== params.userId) {
       // Verify the coach-student relationship
       const student = await db.user.findFirst({
         where: {
-          id: userId,
+          id: targetUser.id,
           coachId: currentUser.id,
         },
       })
@@ -149,7 +173,7 @@ export async function POST(
       data: {
         name: body.name,
         description: body.description,
-        userId: userId,
+        userId: targetUser.id,
         exercises: {
           create: body.exercises.map((exercise) => ({
             exerciseId: exercise.exerciseId,

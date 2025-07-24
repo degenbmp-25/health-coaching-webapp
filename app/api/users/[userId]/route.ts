@@ -24,10 +24,11 @@ export async function GET(
     }
 
     // If user is getting their own details
-    if (params.userId === user.id) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (params.userId === user.clerkId) {
       const userDetails = await db.user.findUnique({
         where: {
-          id: params.userId,
+          clerkId: params.userId,
         },
         select: {
           id: true,
@@ -50,7 +51,7 @@ export async function GET(
       // Check if the requested user is one of their students
       const student = await db.user.findFirst({
         where: {
-          id: params.userId,
+          clerkId: params.userId,
           coachId: user.id,
         },
         select: {
@@ -69,7 +70,7 @@ export async function GET(
     // Default case: fetch limited public info
     const userDetails = await db.user.findUnique({
       where: {
-        id: params.userId,
+        clerkId: params.userId,
       },
       select: {
         id: true,
@@ -100,7 +101,8 @@ export async function PATCH(
       return user
     }
 
-    if (user.id !== params.userId) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (user.clerkId !== params.userId) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
@@ -109,7 +111,7 @@ export async function PATCH(
 
     const updatedUser = await db.user.update({
       where: {
-        id: user.id,
+        clerkId: params.userId,
       },
       data: {
         name: body.name,

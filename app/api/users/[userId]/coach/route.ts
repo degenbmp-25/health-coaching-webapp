@@ -16,18 +16,20 @@ export async function GET(
     }
 
     // Only the user themselves can view their coach
-    if (user.id !== params.userId) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (user.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     const userWithCoach = await db.user.findUnique({
       where: {
-        id: params.userId,
+        clerkId: params.userId,
       },
       include: {
         coach: {
           select: {
             id: true,
+            clerkId: true,
             name: true,
             email: true,
             image: true,
@@ -60,17 +62,43 @@ export async function PATCH(
     }
 
     // Only the user themselves can set their coach
-    if (user.id !== params.userId) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (user.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     const { coachId } = await req.json()
+
+    // Allow null to remove the coach
+    if (coachId === null) {
+      const updatedUser = await db.user.update({
+        where: {
+          clerkId: params.userId,
+        },
+        data: {
+          coachId: null,
+        },
+        include: {
+          coach: {
+            select: {
+              id: true,
+              clerkId: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
+        },
+      })
+      return NextResponse.json(updatedUser.coach)
+    }
 
     if (!coachId) {
       return new NextResponse("Coach ID is required", { status: 400 })
     }
 
     // Verify the coach exists and has the coach role
+    // coachId here is the database ID from the coach selector
     const coach = await db.user.findUnique({
       where: {
         id: coachId,
@@ -88,7 +116,7 @@ export async function PATCH(
     // Update the user's coach
     const updatedUser = await db.user.update({
       where: {
-        id: params.userId,
+        clerkId: params.userId,
       },
       data: {
         coachId: coachId,
@@ -97,6 +125,7 @@ export async function PATCH(
         coach: {
           select: {
             id: true,
+            clerkId: true,
             name: true,
             email: true,
             image: true,

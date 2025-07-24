@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { clerkClient } from "@clerk/nextjs/server"
 
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
@@ -15,7 +16,8 @@ export async function PATCH(
     }
 
     // Only users can change their own role
-    if (user.id !== params.userId) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (user.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -29,10 +31,18 @@ export async function PATCH(
 
     const updatedUser = await db.user.update({
       where: {
-        id: params.userId,
+        clerkId: params.userId,
       },
       data: {
         role: role as string,
+      },
+    })
+
+    // Update Clerk user metadata to sync the role
+    const clerk = await clerkClient()
+    await clerk.users.updateUserMetadata(params.userId, {
+      publicMetadata: {
+        role: role,
       },
     })
 

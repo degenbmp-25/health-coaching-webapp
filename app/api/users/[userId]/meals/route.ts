@@ -24,16 +24,29 @@ export async function GET(
     if (session instanceof NextResponse) return session;
     const currentUser = session;
 
-    const userId = params.userId
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     const { searchParams } = new URL(req.url)
     const dateParam = searchParams.get("date")
     const date = dateParam ? new Date(dateParam) : undefined
     
     // If the user is looking at their own meals
-    if (currentUser.id === userId) {
+    if (currentUser.clerkId === params.userId) {
       const meals = await db.meal.findMany({
         where: {
-          userId: userId,
+          userId: targetUser.id,
           ...(date && {
             date: {
               gte: new Date(date.setHours(0, 0, 0, 0)),
@@ -52,7 +65,7 @@ export async function GET(
     // If a coach is looking at their student's meals
     const student = await db.user.findFirst({
       where: {
-        id: userId,
+        id: targetUser.id,
         coachId: currentUser.id,
       },
     })
@@ -63,7 +76,7 @@ export async function GET(
     
     const meals = await db.meal.findMany({
       where: {
-        userId: userId,
+        userId: targetUser.id,
         ...(date && {
           date: {
             gte: new Date(date.setHours(0, 0, 0, 0)),
@@ -93,14 +106,26 @@ export async function POST(
     if (session instanceof NextResponse) return session;
     const currentUser = session;
 
-    const userId = params.userId
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
     
     // Check if it's the user creating their own meal or if it's their coach
-    if (currentUser.id !== userId) {
+    if (currentUser.clerkId !== params.userId) {
       // Verify the coach-student relationship
       const student = await db.user.findFirst({
         where: {
-          id: userId,
+          id: targetUser.id,
           coachId: currentUser.id,
         },
       })
@@ -125,7 +150,7 @@ export async function POST(
         carbs: body.carbs,
         fat: body.fat,
         date: body.date,
-        userId: userId,
+        userId: targetUser.id,
       },
     })
 

@@ -27,20 +27,34 @@ export async function GET(
       to: to || new Date().toISOString(),
     })
 
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Check if the requesting user is the coach of this student
     const student = await db.user.findFirst({
       where: {
-        id: params.userId,
+        id: targetUser.id,
         coachId: user.id,
       },
     })
 
     // Allow access if it's the user's own data or if they're the coach
-    if (!student && user.id !== params.userId) {
+    if (!student && user.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
-    const dashboardData = await getDashboardData(params.userId, dateRange)
+    const dashboardData = await getDashboardData(targetUser.id, dateRange)
 
     return NextResponse.json(dashboardData)
   } catch (error) {

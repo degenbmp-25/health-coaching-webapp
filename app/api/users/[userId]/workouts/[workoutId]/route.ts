@@ -12,15 +12,28 @@ export async function GET(
     if (authRes instanceof NextResponse) return authRes;
 
     const currentUser = authRes;
-    const userId = params.userId;
     const workoutId = params.workoutId;
     
+    // First, find the target user by Clerk ID
+    const targetUser = await db.user.findUnique({
+      where: {
+        clerkId: params.userId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!targetUser) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+    
     // If the user is looking at their own workout
-    if (currentUser.id === userId) {
+    if (currentUser.clerkId === params.userId) {
       const workout = await db.workout.findFirst({
         where: {
           id: workoutId,
-          userId: userId,
+          userId: targetUser.id,
         },
         include: {
           exercises: {
@@ -44,7 +57,7 @@ export async function GET(
     // If a coach is looking at their student's workout
     const student = await db.user.findFirst({
       where: {
-        id: userId,
+        id: targetUser.id,
         coachId: currentUser.id,
       },
     })
@@ -56,7 +69,7 @@ export async function GET(
     const workout = await db.workout.findFirst({
       where: {
         id: workoutId,
-        userId: userId,
+        userId: targetUser.id,
       },
       include: {
         exercises: {

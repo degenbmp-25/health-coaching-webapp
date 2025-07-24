@@ -14,17 +14,19 @@ export async function GET(
     const currentUser = authRes;
 
     // Only the coach themselves can view their students
-    if (currentUser.id !== params.userId) {
+    // Compare Clerk IDs since the frontend sends Clerk ID
+    if (currentUser.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     // Check if user is a coach
     const coach = await db.user.findUnique({
       where: {
-        id: params.userId,
+        clerkId: params.userId,
       },
       select: {
-        role: true as any,
+        id: true,
+        role: true,
       },
     })
 
@@ -32,12 +34,14 @@ export async function GET(
       return new NextResponse("User is not a coach", { status: 400 })
     }
 
+    // Get students where coachId matches the database ID of the coach
     const students = await db.user.findMany({
       where: {
-        coachId: params.userId as any,
+        coachId: coach.id,
       },
       select: {
         id: true,
+        clerkId: true,
         name: true,
         email: true,
         image: true,

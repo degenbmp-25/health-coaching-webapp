@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 import {
   Card,
   CardContent,
@@ -20,11 +21,13 @@ import { Icons } from "@/components/icons"
 interface UserCoachProps {
   userId: string
   onHasCoach?: (hasCoach: boolean) => void
+  refreshTrigger?: number
 }
 
-export function UserCoach({ userId, onHasCoach }: UserCoachProps) {
+export function UserCoach({ userId, onHasCoach, refreshTrigger }: UserCoachProps) {
   const router = useRouter()
   const { user } = useUser()
+  const { toast } = useToast()
   const [coach, setCoach] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,6 +36,7 @@ export function UserCoach({ userId, onHasCoach }: UserCoachProps) {
     async function fetchCoach() {
       try {
         setLoading(true)
+        setError(null)
         const response = await fetch(`/api/users/${userId}/coach`)
         
         if (response.status === 404) {
@@ -49,6 +53,7 @@ export function UserCoach({ userId, onHasCoach }: UserCoachProps) {
         setCoach(data)
         onHasCoach?.(!!data)
       } catch (err) {
+        console.error("Error fetching coach:", err)
         setError(err instanceof Error ? err.message : "An error occurred")
         onHasCoach?.(false)
       } finally {
@@ -57,7 +62,7 @@ export function UserCoach({ userId, onHasCoach }: UserCoachProps) {
     }
 
     fetchCoach()
-  }, [userId, onHasCoach])
+  }, [userId, onHasCoach, refreshTrigger])
 
   const removeCoach = async () => {
     try {
@@ -71,13 +76,25 @@ export function UserCoach({ userId, onHasCoach }: UserCoachProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to remove coach")
+        const errorText = await response.text()
+        throw new Error(errorText || "Failed to remove coach")
       }
 
       setCoach(null)
       onHasCoach?.(false)
+      toast({
+        title: "Success",
+        description: "Coach removed successfully",
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      console.error("Error removing coach:", err)
+      const errorMessage = err instanceof Error ? err.message : "An error occurred"
+      setError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage,
+      })
     } finally {
       setLoading(false)
     }
