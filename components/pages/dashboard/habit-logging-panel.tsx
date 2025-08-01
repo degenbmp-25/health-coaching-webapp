@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Activity } from "@prisma/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,11 +32,7 @@ export function HabitLoggingPanel({ userId, activities }: HabitLoggingPanelProps
   const [loggingActivity, setLoggingActivity] = useState<string | null>(null)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchGoals()
-  }, [userId])
-
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/${userId}/goals`)
       if (response.ok) {
@@ -48,7 +44,11 @@ export function HabitLoggingPanel({ userId, activities }: HabitLoggingPanelProps
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    fetchGoals()
+  }, [userId, fetchGoals])
 
   const handleToggleComplete = async (goal: Goal) => {
     setIsSaving(true)

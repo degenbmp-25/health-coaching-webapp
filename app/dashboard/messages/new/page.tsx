@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/use-toast"
 import { Icons } from "@/components/icons"
+import Image from "next/image"
 
 interface User {
   id: string
@@ -105,11 +106,14 @@ export default function NewMessagePage() {
                 >
                   <div className="flex items-center gap-4">
                     {user.image ? (
-                      <img
-                        src={user.image}
-                        alt={user.name || "User"}
-                        className="w-10 h-10 rounded-full"
-                      />
+                      <div className="w-10 h-10 rounded-full relative overflow-hidden">
+                        <Image
+                          src={user.image}
+                          alt={user.name || "User"}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
                         <Icons.user className="h-6 w-6" />

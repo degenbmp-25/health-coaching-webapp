@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
 import { format } from "date-fns"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -156,7 +157,7 @@ export default function StudentMealsPage() {
                 <CardContent>
                   {meals.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 border rounded-md">
-                      <Icons.coffee className="h-8 w-8 text-muted-foreground mb-2" />
+                      <Icons.meal className="h-8 w-8 text-muted-foreground mb-2" />
                       <p className="text-muted-foreground">No meals recorded for this date</p>
                     </div>
                   ) : (
@@ -176,11 +177,12 @@ export default function StudentMealsPage() {
                           </div>
                           
                           {meal.imageUrl && (
-                            <div className="mt-3 rounded-md overflow-hidden h-48 w-full">
-                              <img 
+                            <div className="mt-3 rounded-md overflow-hidden h-48 w-full relative">
+                              <Image 
                                 src={meal.imageUrl} 
                                 alt={meal.name}
-                                className="h-full w-full object-cover" 
+                                fill
+                                className="object-cover" 
                               />
                             </div>
                           )}

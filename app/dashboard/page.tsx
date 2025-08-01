@@ -82,7 +82,12 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
         <div className="space-y-6">
           {activityData ? (
             <>
-              <DashboardCardsEnhanced data={dashboardData} searchParams={normalizedSearchParams} />
+              <DashboardCardsEnhanced data={{
+                streak: dashboardData.streak,
+                totalLogs: dashboardData.totalLogs,
+                mostLoggedActivity: dashboardData.mostLoggedActivity,
+                logs: dashboardData.logs
+              }} searchParams={normalizedSearchParams} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <LineChartComponent data={dashboardData.activityCountByDate} />
                 <PieChartComponent data={dashboardData.topActivities} />

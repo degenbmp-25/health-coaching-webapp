@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { format } from "date-fns"
 import { CheckCircle2, Circle, Target, Plus, Edit2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,11 +37,7 @@ export function DashboardGoals({ userId, isCoach = false, studentName }: Dashboa
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
-    fetchGoals()
-  }, [userId])
-
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/${userId}/goals`)
       if (response.ok) {
@@ -53,7 +49,11 @@ export function DashboardGoals({ userId, isCoach = false, studentName }: Dashboa
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    fetchGoals()
+  }, [userId, fetchGoals])
 
   const handleToggleComplete = async (goal: Goal) => {
     if (isCoach) return // Coaches can't toggle completion

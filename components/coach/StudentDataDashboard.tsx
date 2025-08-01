@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
+import Image from "next/image"
 import { 
   Card, 
   CardHeader, 
@@ -373,11 +374,12 @@ export function StudentDataDashboard({
                           <div key={meal.id} className="flex justify-between border-b pb-2">
                             <div className="flex items-center gap-2">
                               {meal.imageUrl && (
-                                <div className="h-10 w-10 rounded-md overflow-hidden flex-shrink-0">
-                                  <img 
+                                <div className="h-10 w-10 rounded-md overflow-hidden flex-shrink-0 relative">
+                                  <Image 
                                     src={meal.imageUrl} 
                                     alt={meal.name} 
-                                    className="h-full w-full object-cover"
+                                    fill
+                                    className="object-cover"
                                   />
                                 </div>
                               )}
@@ -500,11 +502,12 @@ export function StudentDataDashboard({
                               <p className="text-sm text-muted-foreground mt-1">{meal.description}</p>
                             )}
                             {meal.imageUrl && (
-                              <div className="mt-2 rounded-md overflow-hidden h-32 w-full">
-                                <img 
+                              <div className="mt-2 rounded-md overflow-hidden h-32 w-full relative">
+                                <Image 
                                   src={meal.imageUrl} 
                                   alt={meal.name}
-                                  className="h-full w-full object-cover" 
+                                  fill
+                                  className="object-cover" 
                                 />
                               </div>
                             )}

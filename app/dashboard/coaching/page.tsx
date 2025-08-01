@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useUser } from "@clerk/nextjs"
 import { UserCoach } from "@/components/coach/UserCoach"
 import { CoachStudents } from "@/components/coach/CoachStudents"
@@ -38,16 +38,7 @@ export default function CoachingPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   
-  useEffect(() => {
-    if (user?.publicMetadata?.role === "coach") {
-      setActiveTab("coach")
-      fetchStudents()
-    } else {
-      setActiveTab("student")
-    }
-  }, [user?.publicMetadata?.role])
-  
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     if (!user?.id) return
     
     setIsLoadingStudents(true)
@@ -62,7 +53,16 @@ export default function CoachingPage() {
     } finally {
       setIsLoadingStudents(false)
     }
-  }
+  }, [user?.id])
+  
+  useEffect(() => {
+    if (user?.publicMetadata?.role === "coach") {
+      setActiveTab("coach")
+      fetchStudents()
+    } else {
+      setActiveTab("student")
+    }
+  }, [user?.publicMetadata?.role, fetchStudents])
 
   if (!user) {
     return (

@@ -16,7 +16,13 @@ interface DashboardCardsProps {
     totalLogs: number
     mostLoggedActivity: string | undefined
     logs: Array<{
-      createdAt: string | Date
+      id: string
+      date: Date
+      count: number
+      activity: {
+        id: string
+        name: string
+      }
     }>
   }
   searchParams: SearchParams
@@ -42,7 +48,7 @@ export function DashboardCardsEnhanced({ data, searchParams }: DashboardCardsPro
   
   // Calculate weekly logs
   const thisWeekLogs = data.logs.filter(log => {
-    const logDate = new Date(log.createdAt)
+    const logDate = new Date(log.date)
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
     return logDate >= weekAgo
