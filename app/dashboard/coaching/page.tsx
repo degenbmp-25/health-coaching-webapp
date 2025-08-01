@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 
 interface Student {
   id: string
+  clerkId: string
   name: string | null
   email: string | null
   image: string | null
