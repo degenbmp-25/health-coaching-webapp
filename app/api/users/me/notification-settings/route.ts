@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@clerk/nextjs/server'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 
@@ -12,14 +11,14 @@ const updateSettingsSchema = z.object({
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
+    const { userId } = await auth()
 
-    if (!session?.user) {
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { clerkId: userId },
       select: {
         emailNotificationsEnabled: true,
         notificationTime: true,
@@ -45,9 +44,9 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const { userId } = await auth()
 
-    if (!session?.user) {
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -55,7 +54,7 @@ export async function PATCH(request: Request) {
     const validatedData = updateSettingsSchema.parse(body)
 
     const updatedUser = await db.user.update({
-      where: { id: session.user.id },
+      where: { clerkId: userId },
       data: validatedData,
       select: {
         emailNotificationsEnabled: true,
