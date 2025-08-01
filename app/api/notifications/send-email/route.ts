@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     // Check if the student belongs to this coach
     const student = await db.user.findFirst({
       where: {
-        id: validatedData.studentId,
+        clerkId: validatedData.studentId,
         coachId: currentUser.id,
       },
     })

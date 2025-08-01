@@ -45,6 +45,7 @@ import { SendEmailDialog } from "./SendEmailDialog"
 
 interface Student {
   id: string
+  clerkId: string
   name: string | null
   email: string | null
   image: string | null
@@ -128,7 +129,7 @@ export function StudentDataDashboard({
         // Fetch meals
         const dateParam = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''
         const mealsResponse = await fetch(
-          `/api/users/${selectedStudent.id}/meals${dateParam ? `?date=${dateParam}` : ''}`
+          `/api/users/${selectedStudent.clerkId}/meals${dateParam ? `?date=${dateParam}` : ''}`
         )
         
         if (mealsResponse.ok) {
@@ -137,7 +138,7 @@ export function StudentDataDashboard({
         }
         
         // Fetch workouts
-        const workoutsResponse = await fetch(`/api/users/${selectedStudent.id}/workouts`)
+        const workoutsResponse = await fetch(`/api/users/${selectedStudent.clerkId}/workouts`)
         
         if (workoutsResponse.ok) {
           const workoutsData = await workoutsResponse.json()
@@ -145,14 +146,14 @@ export function StudentDataDashboard({
         }
 
         // Fetch activities
-        const activitiesResponse = await fetch(`/api/users/${selectedStudent.id}/activities`)
+        const activitiesResponse = await fetch(`/api/users/${selectedStudent.clerkId}/activities`)
         if (activitiesResponse.ok) {
           const activitiesData = await activitiesResponse.json()
           setStudentActivities(activitiesData)
         }
 
         // Fetch dashboard data (logs and streak)
-        const dashboardResponse = await fetch(`/api/users/${selectedStudent.id}/dashboard`)
+        const dashboardResponse = await fetch(`/api/users/${selectedStudent.clerkId}/dashboard`)
         if (dashboardResponse.ok) {
           const dashboardData = await dashboardResponse.json()
           setStudentLogs(dashboardData.logs || [])
@@ -171,14 +172,14 @@ export function StudentDataDashboard({
   
   // Handle student change
   const handleStudentChange = (studentId: string) => {
-    const student = students.find(s => s.id === studentId)
+    const student = students.find(s => s.clerkId === studentId)
     setSelectedStudent(student)
   }
   
   // Create new workout for student
   const createWorkoutForStudent = () => {
     if (selectedStudent) {
-      router.push(`/dashboard/coaching/students/${selectedStudent.id}/workouts/new`)
+      router.push(`/dashboard/coaching/students/${selectedStudent.clerkId}/workouts/new`)
     }
   }
   
@@ -222,7 +223,7 @@ export function StudentDataDashboard({
     setIsCreateActivityDialogOpen(false) // Close dialog
     // Refetch activities
     try {
-      const activitiesResponse = await fetch(`/api/users/${selectedStudent.id}/activities`)
+      const activitiesResponse = await fetch(`/api/users/${selectedStudent.clerkId}/activities`)
       if (activitiesResponse.ok) {
         const activitiesData = await activitiesResponse.json()
         setStudentActivities(activitiesData)
@@ -257,13 +258,13 @@ export function StudentDataDashboard({
         <CardContent>
           <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4 md:items-center">
             <div className="flex-1">
-              <Select onValueChange={handleStudentChange} defaultValue={selectedStudent?.id}>
+              <Select onValueChange={handleStudentChange} defaultValue={selectedStudent?.clerkId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a student" />
                 </SelectTrigger>
                 <SelectContent>
                   {students.map((student) => (
-                    <SelectItem key={student.id} value={student.id}>
+                    <SelectItem key={student.id} value={student.clerkId}>
                       {student.name || student.email || "Unnamed Student"}
                     </SelectItem>
                   ))}
@@ -292,7 +293,7 @@ export function StudentDataDashboard({
                     <span>Message</span>
                   </Button>
                   <SendEmailDialog
-                    studentId={selectedStudent.id}
+                    studentId={selectedStudent.clerkId}
                     studentName={selectedStudent.name || selectedStudent.email || "Student"}
                   >
                     <Button
@@ -392,7 +393,7 @@ export function StudentDataDashboard({
                             </div>
                           </div>
                         ))}
-                        <Link href={`/dashboard/coaching/students/${selectedStudent.id}/meals`} className="text-sm text-primary hover:underline">
+                        <Link href={`/dashboard/coaching/students/${selectedStudent.clerkId}/meals`} className="text-sm text-primary hover:underline">
                           View all meals
                         </Link>
                       </div>
@@ -420,7 +421,7 @@ export function StudentDataDashboard({
                             </div>
                           </div>
                         ))}
-                        <Link href={`/dashboard/coaching/students/${selectedStudent.id}/workouts`} className="text-sm text-primary hover:underline">
+                        <Link href={`/dashboard/coaching/students/${selectedStudent.clerkId}/workouts`} className="text-sm text-primary hover:underline">
                           View all workouts
                         </Link>
                       </div>
@@ -455,7 +456,7 @@ export function StudentDataDashboard({
 
           <TabsContent value="goals" className="space-y-4">
             <DashboardGoals 
-              userId={selectedStudent.id} 
+              userId={selectedStudent.clerkId} 
               isCoach={true} 
               studentName={selectedStudent.name || "Student"} 
             />
@@ -560,13 +561,13 @@ export function StudentDataDashboard({
                         <div className="flex justify-between items-start mb-2">
                           <h3 className="font-medium text-lg">{workout.name}</h3>
                           <div className="flex gap-2">
-                            <Link href={`/dashboard/coaching/students/${selectedStudent.id}/workouts/${workout.id}/edit`}>
+                            <Link href={`/dashboard/coaching/students/${selectedStudent.clerkId}/workouts/${workout.id}/edit`}>
                               <Button size="sm" variant="outline">
                                 <Icons.edit className="h-4 w-4 mr-1" />
                                 Edit
                               </Button>
                             </Link>
-                            <Link href={`/dashboard/coaching/students/${selectedStudent.id}/workouts/${workout.id}`}>
+                            <Link href={`/dashboard/coaching/students/${selectedStudent.clerkId}/workouts/${workout.id}`}>
                               <Button size="sm" variant="default">
                                 View Details
                               </Button>
@@ -652,7 +653,7 @@ export function StudentDataDashboard({
                              Created {format(new Date(activity.createdAt), 'MMM d, yyyy')}
                            </span>
                            <div className="flex gap-1">
-                             <Link href={`/dashboard/coaching/students/${selectedStudent.id}/activities/${activity.id}/settings`}>
+                             <Link href={`/dashboard/coaching/students/${selectedStudent.clerkId}/activities/${activity.id}/settings`}>
                                <Button size="sm" variant="outline">
                                  <Icons.edit className="h-4 w-4" />
                                </Button>
@@ -689,7 +690,7 @@ export function StudentDataDashboard({
         <Dialog open={isCreateActivityDialogOpen} onOpenChange={setIsCreateActivityDialogOpen}>
            {/* Use the actual CreateStudentActivityDialog component */}
            <CreateStudentActivityDialog
-             studentId={selectedStudent.id}
+             studentId={selectedStudent.clerkId}
              studentName={selectedStudent.name || "this student"} // Provide a fallback name
              onClose={() => setIsCreateActivityDialogOpen(false)}
              onActivityCreated={handleActivityCreated}

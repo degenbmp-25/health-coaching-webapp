@@ -18,22 +18,22 @@ interface StudentActivityEditProps {
   }
 }
 
-async function getStudentActivity(studentId: string, activityId: string, coachId: string) {
-  // Verify coach has access to this student
+async function getStudentActivity(studentClerkId: string, activityId: string, coachId: string) {
+  // First find the student by Clerk ID and verify coach has access
   const student = await db.user.findUnique({
-    where: { id: studentId },
-    select: { coachId: true, name: true }
+    where: { clerkId: studentClerkId },
+    select: { id: true, coachId: true, name: true }
   })
 
   if (!student || student.coachId !== coachId) {
     return null
   }
 
-  // Get the activity
+  // Get the activity using the student's database ID
   const activity = await db.activity.findUnique({
     where: {
       id: activityId,
-      userId: studentId
+      userId: student.id
     },
     select: {
       id: true,

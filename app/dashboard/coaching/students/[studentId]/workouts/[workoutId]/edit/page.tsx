@@ -34,10 +34,10 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     redirect("/dashboard")
   }
 
-  // Get the student and verify coach relationship
+  // Get the student by Clerk ID and verify coach relationship
   const student = await db.user.findFirst({
     where: {
-      id: params.studentId,
+      clerkId: params.studentId,
       coachId: user.id,
     },
     select: {
@@ -51,11 +51,11 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     notFound()
   }
 
-  // Get the workout belonging to this student
+  // Get the workout belonging to this student using their database ID
   const workout = await db.workout.findFirst({
     where: {
       id: params.workoutId,
-      userId: params.studentId,
+      userId: student.id,
     },
     include: {
       exercises: {

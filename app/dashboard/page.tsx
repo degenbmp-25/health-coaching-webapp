@@ -12,7 +12,7 @@ import { PieChartComponent } from "@/components/charts/piechart"
 import { DataTable } from "@/components/data-table"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { Shell } from "@/components/layout/shell"
-import { DashboardCards } from "@/components/pages/dashboard/dashboard-cards"
+import { DashboardCardsEnhanced } from "@/components/pages/dashboard/dashboard-cards-enhanced"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 import { WelcomeCard } from "@/components/pages/dashboard/welcome-card"
 import { StreakOverview } from "@/components/pages/dashboard/streak-overview"
@@ -66,7 +66,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
       </DashboardHeader>
       
       <div className="space-y-4 sm:space-y-6">
-        <HabitLoggingPanel userId={user.id} activities={activities} />
+        <HabitLoggingPanel userId={userId} activities={activities} />
         
         <div className="block sm:hidden px-4">
           <DateRangePicker />
@@ -82,7 +82,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
         <div className="space-y-6">
           {activityData ? (
             <>
-              <DashboardCards data={dashboardData} searchParams={normalizedSearchParams} />
+              <DashboardCardsEnhanced data={dashboardData} searchParams={normalizedSearchParams} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <LineChartComponent data={dashboardData.activityCountByDate} />
                 <PieChartComponent data={dashboardData.topActivities} />

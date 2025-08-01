@@ -9,9 +9,10 @@ import { Icons } from "@/components/icons"
 
 interface QuickLogButtonProps extends ButtonProps {
   activityId: string
+  onLogSuccess?: () => void
 }
 
-export function QuickLogButton({ activityId, ...props }: QuickLogButtonProps) {
+export function QuickLogButton({ activityId, onLogSuccess, ...props }: QuickLogButtonProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
 
@@ -42,6 +43,7 @@ export function QuickLogButton({ activityId, ...props }: QuickLogButtonProps) {
       toast({
         description: "Your activity has been logged successfully.",
       })
+      onLogSuccess?.()
     }
 
     setIsLoading(false)
