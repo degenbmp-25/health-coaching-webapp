@@ -40,7 +40,9 @@ async function getStudentActivity(studentClerkId: string, activityId: string, co
       name: true,
       description: true,
       colorCode: true,
-      userId: true
+      userId: true,
+      scheduledDays: true,
+      targetCount: true
     }
   })
 
@@ -74,6 +76,8 @@ export default async function StudentActivityEdit({ params }: StudentActivityEdi
             name: activity.name,
             description: activity.description,
             colorCode: activity.colorCode,
+            scheduledDays: activity.scheduledDays,
+            targetCount: activity.targetCount,
           }}
         />
       </div>
