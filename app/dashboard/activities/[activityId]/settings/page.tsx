@@ -41,6 +41,8 @@ export default async function ActivityEdit({ params }: ActivityEditProps) {
             name: activity.name,
             description: activity.description,
             colorCode: activity.colorCode,
+            scheduledDays: activity.scheduledDays,
+            targetCount: activity.targetCount,
           }}
         />
       </div>

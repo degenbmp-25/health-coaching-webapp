@@ -26,7 +26,6 @@ import { toast } from "@/components/ui/use-toast"
 import { Icons } from "@/components/icons"
 import { WeekdaySelector } from "@/components/activity/weekday-selector"
 import { Separator } from "@/components/ui/separator"
-import { Target } from "lucide-react"
 
 interface ActivityEditFormProps extends React.HTMLAttributes<HTMLFormElement> {
   activity: Pick<Activity, "id" | "name" | "description" | "colorCode" | "scheduledDays" | "targetCount">
@@ -69,8 +68,6 @@ export function ActivityEditForm({
         name: data.name,
         description: data.description,
         colorCode: color,
-        scheduledDays,
-        targetCount: data.targetCount,
       }),
     })
 
@@ -135,56 +132,6 @@ export function ActivityEditForm({
           <div className="grid gap-3">
             <Label>Color</Label>
             <HexColorPicker color={color} onChange={setColor} />
-          </div>
-          
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Schedule & Goals</CardTitle>
-          <CardDescription>
-            Configure when and how often this activity should be performed
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <WeekdaySelector
-            value={scheduledDays}
-            onChange={(days) => {
-              setScheduledDays(days)
-              setValue("scheduledDays", days)
-            }}
-          />
-          
-          <Separator />
-          
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
-              <Label htmlFor="targetCount" className="text-base">
-                Daily Goal
-              </Label>
-            </div>
-            <div className="flex items-center gap-3">
-              <Input
-                id="targetCount"
-                type="number"
-                min="1"
-                max="100"
-                placeholder="No target set"
-                className="w-[120px]"
-                {...register("targetCount", { valueAsNumber: true })}
-              />
-              <span className="text-sm text-muted-foreground">times per day</span>
-            </div>
-            {errors?.targetCount && (
-              <p className="text-xs text-red-600">
-                {errors.targetCount.message}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Set an optional daily target to track your progress
-            </p>
           </div>
         </CardContent>
         <CardFooter>

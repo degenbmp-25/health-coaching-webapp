@@ -49,6 +49,8 @@ export async function POST(req: Request) {
         name: body.name,
         description: body.description,
         colorCode: body.colorCode,
+        scheduledDays: body.scheduledDays || [],
+        targetCount: body.targetCount,
         userId: user.id,
       },
     })

@@ -65,6 +65,11 @@ model Activity {
   name        String
   description String?
   colorCode   String   @map(name: "color_code")
+  
+  // Weekly schedule fields
+  scheduledDays Int[]    @default([]) @map(name: "scheduled_days") // 0=Sun, 1=Mon, ..., 6=Sat
+  targetCount   Int?     @map(name: "target_count") // Daily target count
+  
   createdAt   DateTime @default(now()) @map(name: "created_at")
   updatedAt   DateTime @updatedAt @map(name: "updated_at")
 

@@ -18,6 +18,7 @@ import { WelcomeCard } from "@/components/pages/dashboard/welcome-card"
 import { StreakOverview } from "@/components/pages/dashboard/streak-overview"
 import { HabitLoggingPanel } from "@/components/pages/dashboard/habit-logging-panel"
 import { QuickActions } from "@/components/pages/dashboard/quick-actions"
+import { TodaysActivities } from "@/components/pages/dashboard/todays-activities"
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -73,6 +74,8 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
         </div>
         
         <WelcomeCard userName={user.name || undefined} />
+        
+        <TodaysActivities userId={userId} activities={activities} />
         
         <StreakOverview logs={dashboardData.logs} streak={dashboardData.streak} />
         

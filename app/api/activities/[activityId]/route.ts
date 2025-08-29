@@ -33,6 +33,8 @@ export async function PATCH(
         name: body.name,
         description: body.description,
         colorCode: body.colorCode,
+        scheduledDays: body.scheduledDays,
+        targetCount: body.targetCount,
         updatedAt: new Date(),
       },
     })

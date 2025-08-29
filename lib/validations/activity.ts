@@ -4,4 +4,6 @@ export const activityPatchSchema = z.object({
   name: z.string().min(3).max(32),
   description: z.string().max(128).optional(),
   colorCode: z.string(),
+  scheduledDays: z.array(z.number().min(0).max(6)).optional(),
+  targetCount: z.number().min(1).max(100).optional().nullable(),
 })
