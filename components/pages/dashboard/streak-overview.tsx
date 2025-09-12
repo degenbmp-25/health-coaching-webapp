@@ -182,7 +182,7 @@ export function StreakOverview({ logs, streak }: StreakOverviewProps) {
         )} />
         <AlertDescription className="flex items-center justify-between">
           <span>{motivation.message}</span>
-          <Link href="/dashboard/activities">
+          <Link href="/dashboard/activities?new=1">
             <Button size="sm" variant="outline" className="ml-4">
               {motivation.action}
             </Button>

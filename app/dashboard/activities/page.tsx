@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 }
 
 interface ActivitiesPageProps {
-  searchParams: { from?: string; to?: string }
+  searchParams: { from?: string; to?: string; new?: string }
 }
 
 export default async function ActivitiesPage({ searchParams }: ActivitiesPageProps) {
@@ -44,6 +44,7 @@ export default async function ActivitiesPage({ searchParams }: ActivitiesPagePro
     to: searchParams.to || "",
   })
   const dashboardData = await getDashboardData(user.id, dateRange)
+  const shouldAutoOpenCreate = searchParams.new === "1"
 
   const activityData =
     dashboardData.activityCountByDate.length > 0 &&
@@ -54,7 +55,7 @@ export default async function ActivitiesPage({ searchParams }: ActivitiesPagePro
       <DashboardHeader heading="Activities" text="Manage account activities.">
         <div className="flex flex-col items-stretch gap-2 md:items-end">
           <DateRangePicker />
-          <ActivityAddButton />
+          <ActivityAddButton autoOpen={shouldAutoOpenCreate} />
         </div>
       </DashboardHeader>
       

@@ -142,7 +142,7 @@ export function HabitLoggingPanel({ userId, activities }: HabitLoggingPanelProps
             <div className="text-center py-6">
               <Icons.activity className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">No activities yet</p>
-              <Link href="/dashboard/activities">
+              <Link href="/dashboard/activities?new=1">
                 <Button size="sm" variant="outline" className="mt-3">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Activity

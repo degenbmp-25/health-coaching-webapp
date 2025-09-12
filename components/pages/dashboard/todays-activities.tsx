@@ -191,7 +191,7 @@ export function TodaysActivities({ userId, activities }: TodaysActivitiesProps) 
                 : "No activities scheduled for today"
               }
             </p>
-            <Link href="/dashboard/activities">
+            <Link href="/dashboard/activities?new=1">
               <Button size="sm" variant="outline">
                 {allScheduledActivities.length === 0 
                   ? "Schedule Activities"

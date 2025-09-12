@@ -16,12 +16,20 @@ import {
 import { toast } from "@/components/ui/use-toast"
 import { Icons } from "@/components/icons"
 
-interface ActivityAddButtonProps extends ButtonProps {}
+interface ActivityAddButtonProps extends ButtonProps {
+  autoOpen?: boolean
+}
 
-export function ActivityAddButton({ ...props }: ActivityAddButtonProps) {
+export function ActivityAddButton({ autoOpen, ...props }: ActivityAddButtonProps) {
   const router = useRouter()
   const [showAddAlert, setShowAddAlert] = React.useState<boolean>(false)
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
+
+  React.useEffect(() => {
+    if (autoOpen) {
+      setShowAddAlert(true)
+    }
+  }, [autoOpen])
 
   async function onClick() {
     setIsLoading(true)
