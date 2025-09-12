@@ -60,12 +60,11 @@ export async function DELETE(
       return new Response(null, { status: 403 })
     }
 
-    // Delete the activity
-    await db.activity.delete({
-      where: {
-        id: params.activityId as string,
-      },
-    })
+    // delete logs first then the activity (defensive if db doesn't have cascade yet)
+    await db.$transaction([
+      db.activityLog.deleteMany({ where: { activityId: params.activityId } }),
+      db.activity.delete({ where: { id: params.activityId } }),
+    ])
 
     return new Response(null, { status: 204 })
   } catch (error) {

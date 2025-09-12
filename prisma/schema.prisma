@@ -87,7 +87,7 @@ model ActivityLog {
   date       DateTime @default(now())
   count      Int      @default(1)
 
-  activity Activity @relation(fields: [activityId], references: [id])
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 
   @@map(name: "activity_log")
 }
