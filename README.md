@@ -6,13 +6,17 @@ Habithletics is an open-source habit tracking app that lets you track daily habi
 
 ## Features
 
-- User-friendly Interface
-- Habit/Activity Tracking
-- Activity Streak Monitoring
-- Dashboard Analytics
-- Google Authentication
-- Web Push Notifications (coming soon)
+- Habit/Activity Tracking with Streaks
+- Dashboard Analytics with Charts
+- Meal Tracking with Macros
+- Workout Management
+- Goal Setting
+- Coach-Student System
+- In-app Messaging
+- Email Notifications (Daily Reminders, Coach Messages)
+- Clerk Authentication
 - Cross-platform Support (PWA)
+- Web Push Notifications (coming soon)
 
 ## Stack
 
@@ -20,10 +24,12 @@ Habithletics is an open-source habit tracking app that lets you track daily habi
 - [TypeScript](https://www.typescriptlang.org)
 - [Tailwind CSS](https://tailwindcss.com)
 - [shadcn/ui](https://ui.shadcn.com) Components
-- [NextAuth.js](https://next-auth.js.org)
+- [Clerk](https://clerk.com) Authentication
 - [Prisma](https://www.prisma.io) ORM
 - [Zod](https://zod.dev) Validations
 - [Neon](https://neon.tech/) Database (PostgreSQL)
+- [Resend](https://resend.com) Email
+- [Cloudinary](https://cloudinary.com) Image Uploads
 
 ## Running Locally
 
