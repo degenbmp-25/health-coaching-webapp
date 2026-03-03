@@ -6,19 +6,19 @@ const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSC1zuoJ5
 export interface Exercise {
   id: string;
   name: string;
-  sets: string;
+  sets: number;
   reps: string;
   tempo: string;
   rest: string;
   load: string[];
   notes: string;
-  videoUrl?: string;
+  category: string; // Movement Prep, Resistance, etc.
 }
 
 export interface Workout {
   id: string;
-  name: string;
-  section: string;
+  name: string; // "Workout A (Legs 1)"
+  category: string;
   exercises: Exercise[];
 }
 
@@ -58,60 +58,78 @@ export async function fetchWorkouts(): Promise<Workout[]> {
   const data = parseCSV(csv);
   
   const workouts: Workout[] = [];
-  let currentWorkout: { name: string; section: string; exercises: Exercise[] } | null = null;
+  let currentWorkout: { name: string; exercises: Exercise[] } | null = null;
+  let currentCategory = '';
   let exerciseCounter = 0;
   
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
-    const firstCell = row[0] || '';
+    const firstCell = (row[0] || '').trim();
+    const secondCell = (row[1] || '').trim();
     
-    // Detect workout headers
-    if (firstCell.startsWith('Workout')) {
-      if (currentWorkout) {
-        workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}` });
+    // Detect workout headers (e.g., "Workout A (Legs 1)")
+    if (firstCell.startsWith('Workout') && firstCell.includes('(')) {
+      if (currentWorkout && currentWorkout.exercises.length > 0) {
+        workouts.push({ 
+          ...currentWorkout, 
+          id: `w${workouts.length + 1}`,
+          category: currentCategory 
+        });
       }
       currentWorkout = {
         name: firstCell.replace(',', '').trim(),
-        section: '',
         exercises: []
       };
+      currentCategory = '';
       continue;
     }
     
-    // Detect section headers
-    if (firstCell === 'Movement Prep' || firstCell === 'Elasticity/Power/Speed/Agility/Skill' || 
-        firstCell === 'Resistance' || firstCell === 'Metabolic/Supplemental/Recovery') {
-      if (currentWorkout) {
-        if (currentWorkout.exercises.length > 0) {
-          workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}` });
-          currentWorkout = { name: currentWorkout.name, section: firstCell, exercises: [] };
-        } else {
-          currentWorkout.section = firstCell;
-        }
-      }
+    // Detect category headers
+    if (firstCell === '#' && (secondCell === 'Movement Prep' || 
+        secondCell === 'Elasticity/Power/Speed/Agility/Skill' || 
+        secondCell === 'Resistance' || 
+        secondCell === 'Metabolic/Supplemental/Recovery')) {
+      currentCategory = secondCell;
+      continue;
+    }
+    
+    // Skip meta rows
+    if (firstCell === 'General notes' || firstCell === '#' || firstCell.startsWith('RST=') || firstCell.startsWith('BB=') || firstCell.startsWith('HK=')) {
+      continue;
+    }
+    
+    // Skip empty rows or rows without exercise name
+    if (!row[1] || row[1].trim() === '') {
       continue;
     }
     
     // Detect exercise rows (start with I, II, III, IV)
     if (['I', 'II', 'III', 'IV'].includes(firstCell) && row[1]) {
+      // Parse sets/reps (format like "4x10RM")
+      const setsReps = row[2] || '';
+      const setsMatch = setsReps.match(/(\d+)x/);
+      const sets = setsMatch ? parseInt(setsMatch[1]) : 1;
+      const reps = setsReps.replace(/^\d+x/, '').replace('RM', ' RM').trim();
+      
+      // Load columns: 3,4,5,6,7 (max 5 sets)
+      const load = [row[3], row[4], row[5], row[6], row[7]].filter(l => l && l.trim());
+      
+      // Tempo is column 9, Rest is column 10
+      const tempo = row[9] || '';
+      const rest = row[10] || '';
+      const notes = row[11] || '';
+      
       const exercise: Exercise = {
         id: `e${++exerciseCounter}`,
         name: row[1] || '',
-        sets: row[2] || '',
-        reps: '',
-        tempo: row[8] || '',
-        rest: row[9] || '',
-        load: [row[3] || '', row[4] || '', row[5] || '', row[6] || '', row[7] || ''].filter(l => l),
-        notes: row[10] || ''
+        sets,
+        reps,
+        tempo,
+        rest,
+        load,
+        notes,
+        category: currentCategory || 'General'
       };
-      
-      // Parse sets/reps (format like "4x10RM")
-      const setsReps = row[2] || '';
-      const match = setsReps.match(/(\d+)x(\d+(?:RM)?)/);
-      if (match) {
-        exercise.sets = match[1];
-        exercise.reps = match[2];
-      }
       
       if (currentWorkout) {
         currentWorkout.exercises.push(exercise);
@@ -121,9 +139,14 @@ export async function fetchWorkouts(): Promise<Workout[]> {
   
   // Add last workout
   if (currentWorkout && currentWorkout.exercises.length > 0) {
-    workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}` });
+    workouts.push({ 
+      ...currentWorkout, 
+      id: `w${workouts.length + 1}`,
+      category: currentCategory 
+    });
   }
   
+  console.log('Parsed workouts:', workouts.length);
   return workouts;
 }
 
@@ -132,6 +155,7 @@ const LOGS_KEY = 'workout_logs';
 
 export function saveLog(log: WorkoutLog): void {
   const logs = getLogs();
+  const key = `${log.exerciseId}_${log.date}`;
   const existingIndex = logs.findIndex(l => l.exerciseId === log.exerciseId && l.date === log.date);
   if (existingIndex >= 0) {
     logs[existingIndex] = log;
