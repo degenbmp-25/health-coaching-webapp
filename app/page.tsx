@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchWorkouts, saveLog, getLogForExercise, type Exercise, type Workout, type WorkoutLog } from '../lib/sheets';
+import { fetchWorkouts, saveLog, type Exercise, type Workout, type WorkoutLog } from '../lib/sheets';
 
 export default function TodayWorkout() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -14,7 +14,6 @@ export default function TodayWorkout() {
       try {
         const data = await fetchWorkouts();
         setWorkouts(data);
-        console.log('Loaded workouts:', data.map(w => w.name));
       } catch (e) {
         console.error('Failed to load workouts:', e);
       } finally {
@@ -24,9 +23,16 @@ export default function TodayWorkout() {
     load();
   }, []);
 
-  // Group exercises by category
-  const currentWorkout = workouts.find(w => w.name.includes(selectedWorkout.split(' ')[1]?.charAt(0) || 'A')) || workouts[0];
-  
+  // Get all workout names from the sheet for the selector
+  const availableWorkouts = workouts.length > 0 
+    ? workouts.map(w => w.name.replace(/\(.*\)/, '').trim())
+    : ['Workout A', 'Workout B', 'Workout C', 'Workout D', 'Workout E'];
+
+  const currentWorkout = workouts.find(w => {
+    const target = selectedWorkout.replace('Workout ', '').charAt(0);
+    return w.name.includes(`(${target}`) || w.name.includes(target);
+  }) || workouts[0];
+
   const exercisesByCategory = currentWorkout?.exercises.reduce((acc, ex) => {
     const cat = ex.category || 'General';
     if (!acc[cat]) acc[cat] = [];
@@ -59,7 +65,6 @@ export default function TodayWorkout() {
   };
 
   const toggleComplete = (exerciseId: string) => {
-    const today = new Date().toISOString().split('T')[0];
     const allSetKeys = Array.from(logs.keys()).filter(k => k.startsWith(exerciseId));
     let allCompleted = true;
     allSetKeys.forEach(key => {
@@ -67,7 +72,6 @@ export default function TodayWorkout() {
       if (log && !log.completed) allCompleted = false;
     });
     
-    // Toggle all sets for this exercise
     allSetKeys.forEach(key => {
       const log = logs.get(key);
       if (log) {
@@ -89,22 +93,25 @@ export default function TodayWorkout() {
     );
   }
 
-  const workoutOptions = ['Workout A', 'Workout B', 'Workout C'];
+  // Use available workouts from sheet or fallback to A-E
+  const workoutOptions = availableWorkouts.length >= 5 
+    ? availableWorkouts 
+    : ['Workout A', 'Workout B', 'Workout C', 'Workout D', 'Workout E'];
 
   return (
     <div className="container">
       <header className="header">
-        <h1>Today's Workout</h1>
+        <h1>Today&apos;s Workout</h1>
         
-        {/* Workout Selector */}
+        {/* Workout Selector - scrollable for A-E */}
         <div className="workout-selector">
-          {workoutOptions.map(opt => (
+          {workoutOptions.map((opt) => (
             <button
               key={opt}
               className={`selector-btn ${selectedWorkout === opt ? 'active' : ''}`}
               onClick={() => setSelectedWorkout(opt)}
             >
-              {opt}
+              {opt.replace('Workout ', '')}
             </button>
           ))}
         </div>
@@ -122,94 +129,125 @@ export default function TodayWorkout() {
       </header>
 
       <div className="workout-list">
-        {Object.entries(exercisesByCategory).map(([category, exercises]) => (
-          <div key={category} className="category-section">
-            <h2 className="category-header">{category}</h2>
-            
-            {exercises.map((exercise, idx) => {
-              // Get all set keys for this exercise
-              const setKeys = Array.from({ length: exercise.sets }, (_, i) => `${exercise.id}_${i}`);
-              const isCompleted = setKeys.every(key => logs.get(key)?.completed);
-              const hasAnyData = setKeys.some(key => logs.get(key)?.weight || logs.get(key)?.reps);
+        {Object.keys(exercisesByCategory).length === 0 ? (
+          <div className="empty-state">
+            <h3>No exercises found</h3>
+            <p>Add exercises to {selectedWorkout} in your Google Sheet</p>
+          </div>
+        ) : (
+          Object.entries(exercisesByCategory).map(([category, exercises]) => (
+            <div key={category} className="category-section">
+              <h2 className="category-header">{category}</h2>
+              
+              {exercises.map((exercise, i) => {
+                const setKeys = Array.from({ length: exercise.sets }, (_, idx) => `${exercise.id}_${idx}`);
+                const isCompleted = setKeys.every(key => logs.get(key)?.completed);
 
-              return (
-                <div key={exercise.id} className={`exercise-card ${isCompleted ? 'completed' : ''}`}>
-                  <div className="exercise-header">
-                    <div>
-                      <span className="exercise-number">{idx + 1}</span>
-                      <span className="exercise-title">{exercise.name}</span>
-                      <div className="exercise-meta">
-                        <span className="sets">{exercise.sets} sets</span>
-                        <span>×</span>
-                        <span>{exercise.reps}</span>
+                return (
+                  <div key={exercise.id} className={`exercise-card ${isCompleted ? 'completed' : ''}`}>
+                    <div className="exercise-header">
+                      <div>
+                        <span className="exercise-number">{i + 1}</span>
+                        <span className="exercise-title">{exercise.name}</span>
+                        <div className="exercise-meta">
+                          <span className="sets">{exercise.sets} sets</span>
+                          <span>×</span>
+                          <span>{exercise.reps}</span>
+                        </div>
                       </div>
+                      {exercise.tempo && (
+                        <span className="tempo-badge">Tempo: {exercise.tempo}</span>
+                      )}
                     </div>
-                    {exercise.tempo && (
-                      <span className="tempo-badge">Tempo: {exercise.tempo}</span>
-                    )}
-                  </div>
 
-                  {/* Dynamic load fields based on sets */}
-                  <div className="sets-container">
-                    {Array.from({ length: exercise.sets }, (_, setIndex) => {
-                      const log = logs.get(`${exercise.id}_${setIndex}`);
-                      return (
-                        <div key={setIndex} className="set-row">
-                          <span className="set-label">Set {setIndex + 1}</span>
-                          <div className="set-inputs">
-                            <div className="input-group">
-                              <label>Weight</label>
-                              <input
-                                type="text"
-                                placeholder={exercise.load[setIndex] || '-'}
-                                value={log?.weight || ''}
-                                onChange={(e) => handleLog(exercise.id, setIndex, e.target.value)}
-                              />
-                            </div>
-                            <div className="input-group">
-                              <label>Reps</label>
-                              <input
-                                type="text"
-                                placeholder={exercise.reps}
-                                value={log?.reps || ''}
-                                onChange={(e) => handleReps(exercise.id, setIndex, e.target.value)}
-                              />
+                    {/* Video placeholder */}
+                    <div className="video-container">
+                      {exercise.videoUrl ? (
+                        <div className="video-placeholder has-video">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                          <p>{exercise.videoUrl}</p>
+                        </div>
+                      ) : (
+                        <div className="video-placeholder">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                            <line x1="7" y1="2" x2="7" y2="22" />
+                            <line x1="17" y1="2" x2="17" y2="22" />
+                            <line x1="2" y1="12" x2="22" y2="12" />
+                            <line x1="2" y1="7" x2="7" y2="7" />
+                            <line x1="2" y1="17" x2="7" y2="17" />
+                            <line x1="17" y1="17" x2="22" y2="17" />
+                            <line x1="17" y1="7" x2="22" y2="7" />
+                          </svg>
+                          <p>Demo video<br/>placeholder</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Dynamic load fields */}
+                    <div className="sets-container">
+                      {Array.from({ length: exercise.sets }, (_, setIndex) => {
+                        const log = logs.get(`${exercise.id}_${setIndex}`);
+                        return (
+                          <div key={setIndex} className="set-row">
+                            <span className="set-label">Set {setIndex + 1}</span>
+                            <div className="set-inputs">
+                              <div className="input-group">
+                                <label>Weight</label>
+                                <input
+                                  type="text"
+                                  placeholder={exercise.load[setIndex] || '-'}
+                                  value={log?.weight || ''}
+                                  onChange={(e) => handleLog(exercise.id, setIndex, e.target.value)}
+                                />
+                              </div>
+                              <div className="input-group">
+                                <label>Reps</label>
+                                <input
+                                  type="text"
+                                  placeholder={exercise.reps}
+                                  value={log?.reps || ''}
+                                  onChange={(e) => handleReps(exercise.id, setIndex, e.target.value)}
+                                />
+                              </div>
                             </div>
                           </div>
+                        );
+                      })}
+                      {exercise.rest && (
+                        <div className="rest-info">
+                          Rest: {exercise.rest}
                         </div>
-                      );
-                    })}
-                    {exercise.rest && (
-                      <div className="rest-info">
-                        Rest: {exercise.rest}
-                      </div>
+                      )}
+                    </div>
+
+                    {exercise.notes && !exercise.videoUrl && (
+                      <p className="exercise-notes">{exercise.notes}</p>
                     )}
+
+                    <button
+                      className={`complete-btn ${isCompleted ? 'completed' : 'pending'}`}
+                      onClick={() => toggleComplete(exercise.id)}
+                    >
+                      {isCompleted ? (
+                        <>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Completed
+                        </>
+                      ) : (
+                        'Mark as Complete'
+                      )}
+                    </button>
                   </div>
-
-                  {exercise.notes && (
-                    <p className="exercise-notes">{exercise.notes}</p>
-                  )}
-
-                  <button
-                    className={`complete-btn ${isCompleted ? 'completed' : 'pending'}`}
-                    onClick={() => toggleComplete(exercise.id)}
-                  >
-                    {isCompleted ? (
-                      <>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Completed
-                      </>
-                    ) : (
-                      'Mark as Complete'
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                );
+              })}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

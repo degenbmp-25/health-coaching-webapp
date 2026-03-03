@@ -12,13 +12,14 @@ export interface Exercise {
   rest: string;
   load: string[];
   notes: string;
-  category: string; // Movement Prep, Resistance, etc.
+  videoUrl?: string;
+  category?: string;
 }
 
 export interface Workout {
   id: string;
-  name: string; // "Workout A (Legs 1)"
-  category: string;
+  name: string;
+  category?: string;
   exercises: Exercise[];
 }
 
@@ -52,13 +53,19 @@ function parseCSV(csv: string): string[][] {
   });
 }
 
+function extractVideoUrl(notes: string): string | undefined {
+  // Look for .MOV, .MP4, .HEIC patterns in notes
+  const match = notes.match(/([a-zA-Z0-9_.-]+\.(MOV|MP4|HEIC|mov|mp4|heic))/);
+  return match ? match[0] : undefined;
+}
+
 export async function fetchWorkouts(): Promise<Workout[]> {
   const response = await fetch(SHEET_CSV_URL);
   const csv = await response.text();
   const data = parseCSV(csv);
   
   const workouts: Workout[] = [];
-  let currentWorkout: { name: string; exercises: Exercise[] } | null = null;
+  let currentWorkout: { category?: string; name: string; exercises: Exercise[] } | null = null;
   let currentCategory = '';
   let exerciseCounter = 0;
   
@@ -70,13 +77,9 @@ export async function fetchWorkouts(): Promise<Workout[]> {
     // Detect workout headers (e.g., "Workout A (Legs 1)")
     if (firstCell.startsWith('Workout') && firstCell.includes('(')) {
       if (currentWorkout && currentWorkout.exercises.length > 0) {
-        workouts.push({ 
-          ...currentWorkout, 
-          id: `w${workouts.length + 1}`,
-          category: currentCategory 
-        });
+        workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
       }
-      currentWorkout = {
+      currentWorkout = { category: '',
         name: firstCell.replace(',', '').trim(),
         exercises: []
       };
@@ -105,13 +108,12 @@ export async function fetchWorkouts(): Promise<Workout[]> {
     
     // Detect exercise rows (start with I, II, III, IV)
     if (['I', 'II', 'III', 'IV'].includes(firstCell) && row[1]) {
-      // Parse sets/reps (format like "4x10RM")
       const setsReps = row[2] || '';
       const setsMatch = setsReps.match(/(\d+)x/);
       const sets = setsMatch ? parseInt(setsMatch[1]) : 1;
       const reps = setsReps.replace(/^\d+x/, '').replace('RM', ' RM').trim();
       
-      // Load columns: 3,4,5,6,7 (max 5 sets)
+      // Load columns: 3,4,5,6,7
       const load = [row[3], row[4], row[5], row[6], row[7]].filter(l => l && l.trim());
       
       // Tempo is column 9, Rest is column 10
@@ -128,6 +130,7 @@ export async function fetchWorkouts(): Promise<Workout[]> {
         rest,
         load,
         notes,
+        videoUrl: extractVideoUrl(notes),
         category: currentCategory || 'General'
       };
       
@@ -139,23 +142,17 @@ export async function fetchWorkouts(): Promise<Workout[]> {
   
   // Add last workout
   if (currentWorkout && currentWorkout.exercises.length > 0) {
-    workouts.push({ 
-      ...currentWorkout, 
-      id: `w${workouts.length + 1}`,
-      category: currentCategory 
-    });
+    workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
   }
   
-  console.log('Parsed workouts:', workouts.length);
+  console.log('Parsed workouts:', workouts.map(w => w.name));
   return workouts;
 }
 
-// Local storage for workout logs
 const LOGS_KEY = 'workout_logs';
 
 export function saveLog(log: WorkoutLog): void {
   const logs = getLogs();
-  const key = `${log.exerciseId}_${log.date}`;
   const existingIndex = logs.findIndex(l => l.exerciseId === log.exerciseId && l.date === log.date);
   if (existingIndex >= 0) {
     logs[existingIndex] = log;
