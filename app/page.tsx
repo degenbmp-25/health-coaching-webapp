@@ -1,64 +1,101 @@
 'use client';
 
-import { useState } from 'react';
-import { mockWorkout, type Exercise } from '../lib/data';
+import { useState, useEffect } from 'react';
+import { fetchWorkouts, saveLog, getLogForExercise, type Exercise, type Workout, type WorkoutLog } from '../lib/sheets';
 
 export default function TodayWorkout() {
-  const [completed, setCompleted] = useState<Set<string>>(new Set());
-  
-  const exerciseCount = mockWorkout.exercises.filter(e => 'id' in e).length;
-  const completedCount = completed.size;
-  const progress = Math.round((completedCount / exerciseCount) * 100);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [selectedWorkout, setSelectedWorkout] = useState<string>('Workout A');
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<Map<string, WorkoutLog>>(new Map());
 
-  const toggleComplete = (id: string) => {
-    const newCompleted = new Set(completed);
-    if (newCompleted.has(id)) {
-      newCompleted.delete(id);
-    } else {
-      newCompleted.add(id);
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await fetchWorkouts();
+        setWorkouts(data);
+      } catch (e) {
+        console.error('Failed to load workouts:', e);
+      } finally {
+        setLoading(false);
+      }
     }
-    setCompleted(newCompleted);
+    load();
+  }, []);
+
+  const currentWorkout = workouts.find(w => w.name.includes(selectedWorkout.split(' ')[1]?.charAt(0) || 'A')) || workouts[0];
+  
+  const exerciseCount = currentWorkout?.exercises.length || 0;
+  const completedCount = Array.from(logs.values()).filter(l => l.completed).length;
+  const progress = exerciseCount > 0 ? Math.round((completedCount / exerciseCount) * 100) : 0;
+
+  const handleLog = (exerciseId: string, field: 'weight' | 'reps', value: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const existing = logs.get(exerciseId) || { exerciseId, date: today, weight: '', reps: '', completed: false };
+    const updated = { ...existing, [field]: value };
+    logs.set(exerciseId, updated);
+    setLogs(new Map(logs));
+    saveLog(updated);
   };
+
+  const toggleComplete = (exerciseId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const existing = logs.get(exerciseId) || { exerciseId, date: today, weight: '', reps: '', completed: false };
+    const updated = { ...existing, completed: !existing.completed };
+    logs.set(exerciseId, updated);
+    setLogs(new Map(logs));
+    saveLog(updated);
+  };
+
+  if (loading) {
+    return (
+      <div className="container">
+        <div style={{ textAlign: 'center', padding: '60px' }}>
+          <p>Loading workouts...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const workoutOptions = ['Workout A', 'Workout B', 'Workout C'];
 
   return (
     <div className="container">
       <header className="header">
-        <h1>Today&apos;s Workout</h1>
-        <p>{mockWorkout.focus}</p>
-        <span className="date-badge">{mockWorkout.date}</span>
+        <h1>Today's Workout</h1>
+        
+        {/* Workout Selector */}
+        <div className="workout-selector">
+          {workoutOptions.map(opt => (
+            <button
+              key={opt}
+              className={`selector-btn ${selectedWorkout === opt ? 'active' : ''}`}
+              onClick={() => setSelectedWorkout(opt)}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        
+        <p className="focus">{currentWorkout?.name || 'Select a workout'}</p>
         
         <div className="progress-section">
           <div className="progress-text">
             {completedCount} of {exerciseCount} exercises complete
           </div>
           <div className="progress-bar">
-            <div 
-              className="progress-fill" 
-              style={{ width: `${progress}%` }}
-            />
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
         </div>
       </header>
 
       <div className="workout-list">
-        {mockWorkout.exercises.map((item, index) => {
-          if ('type' in item && item.type === 'rest') {
-            return (
-              <div key={`rest-${index}`} className="rest-card">
-                <h3>Rest Period</h3>
-                <p>{item.duration} seconds</p>
-              </div>
-            );
-          }
-
-          const exercise = item as Exercise;
-          const isCompleted = completed.has(exercise.id);
+        {currentWorkout?.exercises.map((exercise, index) => {
+          const log = logs.get(exercise.id);
+          const isCompleted = log?.completed || false;
 
           return (
-            <div 
-              key={exercise.id} 
-              className={`exercise-card ${isCompleted ? 'completed' : ''}`}
-            >
+            <div key={exercise.id} className={`exercise-card ${isCompleted ? 'completed' : ''}`}>
               <div className="exercise-header">
                 <div>
                   <span className="exercise-number">{index + 1}</span>
@@ -66,27 +103,46 @@ export default function TodayWorkout() {
                   <div className="exercise-meta">
                     <span className="sets">{exercise.sets} sets</span>
                     <span>×</span>
-                    <span>{exercise.reps} reps</span>
+                    <span>{exercise.reps}</span>
                   </div>
                 </div>
+                {exercise.tempo && (
+                  <span className="tempo-badge">Tempo: {exercise.tempo}</span>
+                )}
               </div>
 
-              <div className="video-container">
-                <div className="video-placeholder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
-                  <p>Demo video<br/>placeholder</p>
+              {/* Load/Weight inputs */}
+              <div className="weight-tracking">
+                <div className="input-group">
+                  <label>Weight (lbs)</label>
+                  <input
+                    type="number"
+                    placeholder="Load"
+                    value={log?.weight || ''}
+                    onChange={(e) => handleLog(exercise.id, 'weight', e.target.value)}
+                  />
                 </div>
+                <div className="input-group">
+                  <label>Actual Reps</label>
+                  <input
+                    type="number"
+                    placeholder="Reps"
+                    value={log?.reps || ''}
+                    onChange={(e) => handleLog(exercise.id, 'reps', e.target.value)}
+                  />
+                </div>
+                {exercise.rest && (
+                  <div className="rest-badge">
+                    <span>Rest: {exercise.rest}</span>
+                  </div>
+                )}
               </div>
 
               {exercise.notes && (
-                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-                  {exercise.notes}
-                </p>
+                <p className="exercise-notes">{exercise.notes}</p>
               )}
 
-              <button 
+              <button
                 className={`complete-btn ${isCompleted ? 'completed' : 'pending'}`}
                 onClick={() => toggleComplete(exercise.id)}
               >
