@@ -30,9 +30,7 @@ export default async function WorkoutsPage() {
       >
         <WorkoutAddButton />
       </DashboardHeader>
-      <div className="divide-y divide-border rounded-md border">
-        <WorkoutList workouts={workouts} />
-      </div>
+      <WorkoutList workouts={workouts} />
     </Shell>
   )
 } 

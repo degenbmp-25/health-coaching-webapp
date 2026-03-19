@@ -33,10 +33,10 @@ export function WorkoutList({ workouts }: WorkoutListProps) {
   }
 
   return (
-    <div className="divide-y divide-border rounded-md border">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {workouts.map((workout) => (
         <WorkoutItem key={workout.id} workout={workout} />
       ))}
     </div>
   )
-} 
+}
