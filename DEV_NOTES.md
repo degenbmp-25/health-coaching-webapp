@@ -129,7 +129,42 @@ app/dashboard/workouts/page.tsx               # Workout list page
 app/dashboard/workouts/[workoutId]/page.tsx   # Workout session page
 app/dashboard/workouts/[workoutId]/edit/page.tsx  # Edit page (unchanged)
 app/api/workouts/route.ts                     # POST create workout
-app/api/workouts/[workoutId]/route.ts         # PATCH update (DELETE missing!)
+app/api/workouts/[workoutId]/route.ts         # PATCH update + DELETE (fixed 2026-03-23)
 lib/api/workouts.ts                           # Data access functions
 prisma/schema.prisma                          # Database schema
 ```
+
+---
+
+## Project Goals — Phase 1.5 (Gym/Trainer SaaS)
+
+**Concept:** Sell a membership-based system to existing gyms as a client management tool for their trainers.
+
+**Date captured:** 2026-03-23
+
+### Recommended Workout Page Changes for Phase 1.5
+
+**1. Workout Templates (highest priority)**
+- Add a `WorkoutTemplate` model separate from `Workout`
+- Trainers build templates, then assign them to clients (creates a copy or reference per client)
+- Client sees their assigned workouts; trainer sees all templates + assignment status per client
+
+**2. Trainer Dashboard — Client Workout Overview**
+- Trainer-centric grid showing all clients: who has a workout today, who completed it
+- Current coach view shows individual student workouts; Phase 1.5 needs an aggregated view
+- Workout page structure stays the same; navigation layer above it changes significantly
+
+**3. Workout Scheduling / Calendar**
+- Support program structures (3-day splits, 5/3/1, A/B/C rotation, weekday assignments)
+- Auto-surface "Today is Day B for this client" rather than requiring manual workout selection
+- `order` field already exists in schema — can be extended with schedule metadata
+
+**4. Session Persistence (non-negotiable for paid product)**
+- Currently set logs are lost on page refresh (client-side state only)
+- Must save sets/reps/weights to DB mid-session before charging customers
+- Requires new `WorkoutSession` / `WorkoutLog` Prisma model + API endpoints
+- See existing TODO in "Known Gaps" section above
+
+**What stays the same:**
+- Card layout and session tracking UI are solid as-is
+- Only the data model and navigation layer need to change
