@@ -29,9 +29,10 @@ model User {
   sentMessages     Message[]  @relation("SentMessages")
   receivedMessages Message[]  @relation("ReceivedMessages")
   conversations    Conversation[]
-  customExercises Exercise[]
-  goals         Goal[]
+  customExercises  Exercise[]
+  goals            Goal[]
   emailNotifications EmailNotification[]
+  workoutSessions  WorkoutSession[]
   
   // Coach-student relationship
   coachId      String?   @map(name: "coach_id")
@@ -120,6 +121,7 @@ model Workout {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   exercises WorkoutExercise[]
+  sessions  WorkoutSession[]
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map(name: "workouts")
@@ -159,8 +161,44 @@ model WorkoutExercise {
 
   workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id])
+  setLogs  SetLog[]
 
   @@map(name: "workout_exercises")
+}
+
+model WorkoutSession {
+  id          String    @id @default(cuid())
+  workoutId   String    @map("workout_id")
+  userId      String    @map("user_id")
+  status      String    @default("in_progress") // "in_progress", "completed"
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workout Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setLogs SetLog[]
+
+  @@map(name: "workout_sessions")
+}
+
+model SetLog {
+  id                String  @id @default(cuid())
+  sessionId         String  @map("session_id")
+  workoutExerciseId String  @map("workout_exercise_id")
+  setNumber         Int     @map("set_number")
+  weight            Float?
+  reps              Int?
+  completed         Boolean @default(false)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  session         WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, workoutExerciseId, setNumber])
+  @@map(name: "set_logs")
 }
 
 model Message {

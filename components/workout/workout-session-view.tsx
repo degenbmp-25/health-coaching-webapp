@@ -31,9 +31,88 @@ interface WorkoutSessionViewProps {
   workout: WorkoutWithExercises
 }
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = React.useState(value)
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
+
 export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
   const router = useRouter()
   const [logs, setLogs] = React.useState<Map<string, SetLog>>(new Map())
+  const [sessionId, setSessionId] = React.useState<string | null>(null)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [isCompleting, setIsCompleting] = React.useState(false)
+  const debouncedLogs = useDebounce(logs, 1000)
+  const initializedRef = React.useRef(false)
+
+  // Create or resume a session on mount
+  React.useEffect(() => {
+    async function initSession() {
+      try {
+        const res = await fetch("/api/workout-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workoutId: workout.id }),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        setSessionId(data.id)
+
+        // Restore set logs from existing session
+        if (data.setLogs && data.setLogs.length > 0) {
+          const restored = new Map<string, SetLog>()
+          for (const log of data.setLogs) {
+            const key = `${log.workoutExerciseId}_${log.setNumber}`
+            restored.set(key, {
+              weight: log.weight != null ? String(log.weight) : "",
+              reps: log.reps != null ? String(log.reps) : "",
+              completed: log.completed,
+            })
+          }
+          setLogs(restored)
+        }
+        initializedRef.current = true
+      } catch {
+        initializedRef.current = true
+      }
+    }
+    initSession()
+  }, [workout.id])
+
+  // Auto-save set logs whenever they change (debounced)
+  React.useEffect(() => {
+    if (!sessionId || !initializedRef.current || debouncedLogs.size === 0) return
+
+    async function saveSets() {
+      setIsSaving(true)
+      try {
+        const sets = Array.from(debouncedLogs.entries()).map(([key, log]) => {
+          const [workoutExerciseId, setNumberStr] = key.split("_")
+          return {
+            workoutExerciseId,
+            setNumber: parseInt(setNumberStr, 10),
+            weight: log.weight ? parseFloat(log.weight) : null,
+            reps: log.reps ? parseInt(log.reps, 10) : null,
+            completed: log.completed,
+          }
+        })
+        await fetch(`/api/workout-sessions/${sessionId}/sets`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sets }),
+        })
+      } catch {
+        // Silent fail — data is still in state
+      } finally {
+        setIsSaving(false)
+      }
+    }
+    saveSets()
+  }, [debouncedLogs, sessionId])
 
   const exercisesByCategory = workout.exercises.reduce((acc, we) => {
     const cat = we.exercise.category || "General"
@@ -49,18 +128,16 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
   const updateLog = (exerciseId: string, setIndex: number, field: "weight" | "reps", value: string) => {
     const key = `${exerciseId}_${setIndex}`
     const existing = logs.get(key) || { weight: "", reps: "", completed: false }
-    const updated = { ...existing, [field]: value }
     const newLogs = new Map(logs)
-    newLogs.set(key, updated)
+    newLogs.set(key, { ...existing, [field]: value })
     setLogs(newLogs)
   }
 
   const toggleSetComplete = (exerciseId: string, setIndex: number) => {
     const key = `${exerciseId}_${setIndex}`
     const existing = logs.get(key) || { weight: "", reps: "", completed: false }
-    const updated = { ...existing, completed: !existing.completed }
     const newLogs = new Map(logs)
-    newLogs.set(key, updated)
+    newLogs.set(key, { ...existing, completed: !existing.completed })
     setLogs(newLogs)
   }
 
@@ -81,6 +158,44 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
     setLogs(newLogs)
   }
 
+  const handleFinishWorkout = async () => {
+    setIsCompleting(true)
+    try {
+      if (sessionId && logs.size > 0) {
+        const sets = Array.from(logs.entries()).map(([key, log]) => {
+          const [workoutExerciseId, setNumberStr] = key.split("_")
+          return {
+            workoutExerciseId,
+            setNumber: parseInt(setNumberStr, 10),
+            weight: log.weight ? parseFloat(log.weight) : null,
+            reps: log.reps ? parseInt(log.reps, 10) : null,
+            completed: log.completed,
+          }
+        })
+        await fetch(`/api/workout-sessions/${sessionId}/sets`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sets }),
+        })
+        await fetch(`/api/workout-sessions/${sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "completed" }),
+        })
+      }
+      toast({ title: "Workout saved!", description: "Your session has been recorded." })
+      router.push("/dashboard/workouts")
+    } catch {
+      toast({
+        title: "Error saving workout",
+        description: "Your progress may not have saved. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCompleting(false)
+    }
+  }
+
   const completedExercises = workout.exercises.filter(isExerciseComplete).length
 
   return (
@@ -95,9 +210,17 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                 <p className="text-sm text-muted-foreground mt-1">{workout.description}</p>
               )}
             </div>
-            <Badge variant="outline" className="text-sm">
-              {completedExercises}/{workout.exercises.length} exercises
-            </Badge>
+            <div className="flex items-center gap-2">
+              {isSaving && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Icons.spinner className="h-3 w-3 animate-spin" />
+                  Saving…
+                </span>
+              )}
+              <Badge variant="outline" className="text-sm">
+                {completedExercises}/{workout.exercises.length} exercises
+              </Badge>
+            </div>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
@@ -133,34 +256,20 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                 )}
               >
                 <div className="p-5">
-                  {/* Exercise Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start gap-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                         {exerciseIndex + 1}
                       </span>
                       <div>
-                        <h4
-                          className={cn(
-                            "font-semibold text-lg",
-                            exerciseComplete && "line-through text-muted-foreground"
-                          )}
-                        >
+                        <h4 className={cn("font-semibold text-lg", exerciseComplete && "line-through text-muted-foreground")}>
                           {we.exercise.name}
                         </h4>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {we.sets} sets
-                          </Badge>
+                          <Badge variant="secondary" className="text-xs">{we.sets} sets</Badge>
                           <span className="text-muted-foreground text-xs">x</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {we.reps} reps
-                          </Badge>
-                          {we.weight && (
-                            <Badge variant="outline" className="text-xs">
-                              {we.weight} kg
-                            </Badge>
-                          )}
+                          <Badge variant="secondary" className="text-xs">{we.reps} reps</Badge>
+                          {we.weight && <Badge variant="outline" className="text-xs">{we.weight} kg</Badge>}
                           {we.duration && (
                             <Badge variant="outline" className="text-xs">
                               <Icons.clock className="mr-1 h-3 w-3" />
@@ -170,12 +279,9 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                         </div>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {we.exercise.muscleGroup}
-                    </Badge>
+                    <Badge variant="outline" className="text-xs capitalize">{we.exercise.muscleGroup}</Badge>
                   </div>
 
-                  {/* Set Tracking Rows */}
                   <div className="space-y-2 mb-4">
                     {Array.from({ length: we.sets }, (_, setIndex) => {
                       const key = `${we.id}_${setIndex}`
@@ -187,9 +293,7 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                           key={setIndex}
                           className={cn(
                             "flex items-center gap-3 rounded-lg p-3 transition-colors",
-                            setComplete
-                              ? "bg-primary/10"
-                              : "bg-muted/50"
+                            setComplete ? "bg-primary/10" : "bg-muted/50"
                           )}
                         >
                           <button
@@ -203,9 +307,7 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                             )}
                             aria-label={`Toggle set ${setIndex + 1} complete`}
                           >
-                            {setComplete && (
-                              <Icons.check className="h-3.5 w-3.5" />
-                            )}
+                            {setComplete && <Icons.check className="h-3.5 w-3.5" />}
                           </button>
                           <span className="text-sm font-medium text-muted-foreground min-w-[50px]">
                             Set {setIndex + 1}
@@ -239,26 +341,16 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                     })}
                   </div>
 
-                  {/* Notes */}
-                  {we.notes && (
-                    <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>
-                  )}
+                  {we.notes && <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>}
 
-                  {/* Complete Exercise Button */}
                   <Button
                     type="button"
                     variant={exerciseComplete ? "default" : "outline"}
-                    className={cn(
-                      "w-full",
-                      !exerciseComplete && "border-dashed"
-                    )}
+                    className={cn("w-full", !exerciseComplete && "border-dashed")}
                     onClick={() => toggleExerciseComplete(we)}
                   >
                     {exerciseComplete ? (
-                      <>
-                        <Icons.check className="mr-2 h-4 w-4" />
-                        Completed
-                      </>
+                      <><Icons.check className="mr-2 h-4 w-4" />Completed</>
                     ) : (
                       "Mark as Complete"
                     )}
@@ -278,8 +370,12 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
           <p className="text-sm text-muted-foreground mb-4">
             Great job finishing all {workout.exercises.length} exercises.
           </p>
-          <Button onClick={() => router.push("/dashboard/workouts")}>
-            Back to Workouts
+          <Button onClick={handleFinishWorkout} disabled={isCompleting}>
+            {isCompleting ? (
+              <><Icons.spinner className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+            ) : (
+              "Save & Finish"
+            )}
           </Button>
         </Card>
       )}
