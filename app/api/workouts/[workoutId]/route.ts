@@ -103,4 +103,51 @@ export async function PATCH(
 
     return new Response(null, { status: 500 })
   }
+}
+
+export async function DELETE(
+  req: Request,
+  context: z.infer<typeof routeContextSchema>
+) {
+  try {
+    const { params } = routeContextSchema.parse(context)
+
+    const user = await getCurrentUser()
+    if (!user) {
+      return new Response("Unauthorized", { status: 403 })
+    }
+
+    // Verify user owns the workout OR is the coach of the workout owner
+    const workout = await db.workout.findFirst({
+      where: {
+        id: params.workoutId,
+        OR: [
+          { userId: user.id },
+          {
+            user: {
+              coachId: user.id,
+            },
+          },
+        ],
+      },
+    })
+
+    if (!workout) {
+      return new Response("Unauthorized", { status: 403 })
+    }
+
+    await db.workout.delete({
+      where: {
+        id: params.workoutId,
+      },
+    })
+
+    return new Response(null, { status: 204 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return new Response(JSON.stringify(error.issues), { status: 422 })
+    }
+
+    return new Response(null, { status: 500 })
+  }
 } 
