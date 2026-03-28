@@ -50,7 +50,7 @@ export async function GET(
     })
 
     // Allow access if it's the user's own data or if they're the coach
-    if (!student && user.clerkId !== params.userId) {
+    if (!student && user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 

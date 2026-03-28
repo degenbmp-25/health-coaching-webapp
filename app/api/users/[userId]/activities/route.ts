@@ -32,7 +32,7 @@ export async function GET(
     // Check if user is accessing their own activities or if they're a coach accessing student's activities
     let hasAccess = false
 
-    if (user.clerkId === params.userId) {
+    if (user.id === params.userId) {
       hasAccess = true
     } else if (user.role === "coach") {
       // Check if the requested user is one of their students
@@ -99,7 +99,7 @@ export async function POST(
     // Check if user is creating for themselves or if they're a coach creating for their student
     let hasAccess = false
 
-    if (user.clerkId === params.userId) {
+    if (user.id === params.userId) {
       hasAccess = true
     } else if (user.role === "coach") {
       // Check if the requested user is one of their students

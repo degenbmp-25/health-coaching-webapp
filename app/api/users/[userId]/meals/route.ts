@@ -43,7 +43,7 @@ export async function GET(
     const date = dateParam ? new Date(dateParam) : undefined
     
     // If the user is looking at their own meals
-    if (currentUser.clerkId === params.userId) {
+    if (currentUser.id === params.userId) {
       const meals = await db.meal.findMany({
         where: {
           userId: targetUser.id,
@@ -121,7 +121,7 @@ export async function POST(
     }
     
     // Check if it's the user creating their own meal or if it's their coach
-    if (currentUser.clerkId !== params.userId) {
+    if (currentUser.id !== params.userId) {
       // Verify the coach-student relationship
       const student = await db.user.findFirst({
         where: {

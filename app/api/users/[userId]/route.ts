@@ -63,7 +63,7 @@ export async function GET(
         },
         include: {
           user: {
-            select: { id: true, name: true, email: true, image: true },
+            select: { id: true, name: true, email: true, image: true, organizationRole: true, primaryTrainerId: true },
             include: { programAssignments: true, workoutSessions: true },
           },
         },

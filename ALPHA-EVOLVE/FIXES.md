@@ -123,6 +123,143 @@ const targetMembership = await db.organizationMember.findFirst({
 
 ---
 
+## Alpha-Evolve Iteration 2 Fixes (2026-03-28)
+
+### CRITICAL #1: activities/route.ts - clerkId vs id mismatch
+**File:** `app/api/users/[userId]/activities/route.ts`
+
+**Problem:** Authorization checks compared `user.clerkId === params.userId`, but `params.userId` is the database UUID (not clerkId), causing all cross-user access checks to fail.
+
+**Fix:** Changed `user.clerkId` to `user.id` in both GET and POST handlers:
+```typescript
+// Before:
+if (user.clerkId === params.userId) {
+
+// After:
+if (user.id === params.userId) {
+```
+
+### CRITICAL #2: coach/route.ts - clerkId vs id mismatch + wrong where clause
+**File:** `app/api/users/[userId]/coach/route.ts`
+
+**Problem:** (1) Authorization check used `user.clerkId !== params.userId`. (2) Prisma `where` clauses used `clerkId: params.userId` instead of `id: params.userId`.
+
+**Fix:** Changed authorization check and all Prisma where clauses:
+```typescript
+// Authorization - Before:
+if (user.clerkId !== params.userId)
+
+// Authorization - After:
+if (user.id !== params.userId)
+
+// Prisma where - Before:
+where: { clerkId: params.userId }
+
+// Prisma where - After:
+where: { id: params.userId }
+```
+
+### CRITICAL #3: dashboard/route.ts - clerkId vs id mismatch
+**File:** `app/api/users/[userId]/dashboard/route.ts`
+
+**Problem:** Access check `user.clerkId !== params.userId` used wrong field.
+
+**Fix:** Changed to `user.id !== params.userId`:
+```typescript
+// Before:
+if (!student && user.clerkId !== params.userId)
+
+// After:
+if (!student && user.id !== params.userId)
+```
+
+### CRITICAL #4: meals/route.ts - clerkId vs id mismatch
+**File:** `app/api/users/[userId]/meals/route.ts`
+
+**Problem:** Both GET and POST handlers used `currentUser.clerkId` in comparisons with `params.userId`.
+
+**Fix:** Changed to `currentUser.id` in both handlers:
+```typescript
+// GET - Before:
+if (currentUser.clerkId === params.userId)
+
+// GET - After:
+if (currentUser.id === params.userId)
+
+// POST - Before:
+if (currentUser.clerkId !== params.userId)
+
+// POST - After:
+if (currentUser.id !== params.userId)
+```
+
+### CRITICAL #5: role/route.ts - clerkId vs id mismatch in where clause
+**File:** `app/api/users/[userId]/role/route.ts`
+
+**Problem:** (1) Authorization check used `user.clerkId`. (2) Prisma `where` clause used `clerkId: params.userId` instead of `id: params.userId`.
+
+**Fix:**
+```typescript
+// Authorization - Before:
+if (user.clerkId !== params.userId)
+
+// Authorization - After:
+if (user.id !== params.userId)
+
+// Prisma where - Before:
+where: { clerkId: params.userId }
+
+// Prisma where - After:
+where: { id: params.userId }
+```
+
+### CRITICAL #6: workouts/[workoutId]/route.ts - clerkId vs id mismatch
+**File:** `app/api/users/[userId]/workouts/[workoutId]/route.ts`
+
+**Problem:** GET handler used `currentUser.clerkId === params.userId` for own-workout check.
+
+**Fix:**
+```typescript
+// Before:
+if (currentUser.clerkId === params.userId)
+
+// After:
+if (currentUser.id === params.userId)
+```
+
+### CRITICAL #7: Missing relations in user detail route
+**File:** `app/api/users/[userId]/route.ts`
+
+**Problem:** Trainer client query was missing `organizationRole` and `primaryTrainerId` scalar fields in select, and had incorrect mix of `select` and `include` on same level.
+
+**Fix:** Separated `select` (for scalars) and `include` (for relations), added missing scalar fields:
+```typescript
+// Before (broken - select + include conflict, missing scalars):
+user: {
+  select: { id: true, name: true, email: true, image: true },
+  include: { programAssignments: true, workoutSessions: true, organizationRole: true, primaryTrainerId: true },
+}
+
+// After (fixed - proper select/include separation, all fields present):
+user: {
+  select: { id: true, name: true, email: true, image: true, organizationRole: true, primaryTrainerId: true },
+  include: { programAssignments: true, workoutSessions: true },
+}
+```
+
+### MEDIUM #1: Prisma duplicate name field in Exercise
+**File:** `prisma/schema.prisma`
+
+**Problem:** Issue described a duplicate `name` field in Exercise model.
+
+**Finding:** Upon inspection, Exercise model only has a single `name` field (line 150: `name String`). No duplicate exists in current schema. Issue may have been resolved in prior iteration or was misreported.
+
+**Status:** No action needed.
+
+---
+
 ## Verification
 
-- TypeScript check: `npx tsc --noEmit` ✓ No errors
+- TypeScript check: `npx tsc --noEmit` ✓ No errors (all 8 issues resolved)
+- All fixes applied to branch `multi-tenant-v1`
+

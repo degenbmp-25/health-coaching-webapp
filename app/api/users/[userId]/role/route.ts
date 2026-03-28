@@ -16,8 +16,7 @@ export async function PATCH(
     }
 
     // Only users can change their own role
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (user.clerkId !== params.userId) {
+    if (user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -31,7 +30,7 @@ export async function PATCH(
 
     const updatedUser = await db.user.update({
       where: {
-        clerkId: params.userId,
+        id: params.userId,
       },
       data: {
         role: role as string,

@@ -29,7 +29,7 @@ export async function GET(
     }
     
     // If the user is looking at their own workout
-    if (currentUser.clerkId === params.userId) {
+    if (currentUser.id === params.userId) {
       const workout = await db.workout.findFirst({
         where: {
           id: workoutId,

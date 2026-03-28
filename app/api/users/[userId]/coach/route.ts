@@ -16,14 +16,13 @@ export async function GET(
     }
 
     // Only the user themselves can view their coach
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (user.clerkId !== params.userId) {
+    if (user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     const userWithCoach = await db.user.findUnique({
       where: {
-        clerkId: params.userId,
+        id: params.userId,
       },
       include: {
         coach: {
@@ -62,8 +61,7 @@ export async function PATCH(
     }
 
     // Only the user themselves can set their coach
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (user.clerkId !== params.userId) {
+    if (user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -73,7 +71,7 @@ export async function PATCH(
     if (coachId === null) {
       const updatedUser = await db.user.update({
         where: {
-          clerkId: params.userId,
+          id: params.userId,
         },
         data: {
           coachId: null,
@@ -116,7 +114,7 @@ export async function PATCH(
     // Update the user's coach
     const updatedUser = await db.user.update({
       where: {
-        clerkId: params.userId,
+        id: params.userId,
       },
       data: {
         coachId: coachId,
