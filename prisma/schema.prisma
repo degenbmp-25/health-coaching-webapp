@@ -34,10 +34,24 @@ model User {
   emailNotifications EmailNotification[]
   workoutSessions  WorkoutSession[]
   
-  // Coach-student relationship
+  // Coach-student relationship (legacy, keeping for backwards compatibility)
   coachId      String?   @map(name: "coach_id")
   coach        User?     @relation("CoachToStudents", fields: [coachId], references: [id], onDelete: SetNull)
   students     User[]    @relation("CoachToStudents")
+  
+  // Multi-tenant: role within current organization context
+  organizationRole String?  @map("organization_role") // "owner" | "trainer" | "client"
+  
+  // Multi-tenant: primary trainer for this client
+  primaryTrainerId String?  @map("primary_trainer_id")
+  primaryTrainer   User?    @relation("TrainerToClients", fields: [primaryTrainerId], references: [id], onDelete: SetNull)
+  clients          User[]   @relation("TrainerToClients")
+
+  // Multi-tenant relations
+  organizationMemberships OrganizationMember[]
+  createdPrograms         Program[]           @relation("ProgramCreator")
+  programAssignments      ProgramAssignment[]  @relation("ClientPrograms")
+  sheetConnections        SheetConnection[]   @relation("SheetConnections")
   
   @@map(name: "users")
 }
@@ -124,6 +138,10 @@ model Workout {
   sessions  WorkoutSession[]
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Multi-tenant: program this workout belongs to
+  programId String?  @map("program_id")
+  program   Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+
   @@map(name: "workouts")
 }
 
@@ -175,6 +193,9 @@ model WorkoutSession {
   completedAt DateTime? @map("completed_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Session-level notes for context (RPE, pain, mood, etc.)
+  notes String? @db.Text
 
   workout Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -247,3 +268,96 @@ model EmailNotification {
   @@map(name: "email_notifications")
 }
 
+// ============================================
+// MULTI-TENANT MODELS
+// ============================================
+
+// Organization - represents a gym or personal training business
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // "gym" | "personal"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members          OrganizationMember[]
+  programs         Program[]
+  sheetConnections SheetConnection[]
+
+  @@map("organizations")
+}
+
+// OrganizationMember - junction table for users ↔ organizations with roles
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           String   // "owner" | "trainer" | "client"
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user can only have one role per organization
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+// Program - a reusable workout template owned by an organization
+model Program {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String   @map("organization_id")
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                @relation("ProgramCreator", fields: [createdById], references: [id])
+  workouts       Workout[]           // Programs contain multiple workouts
+  assignments    ProgramAssignment[]
+
+  @@map("programs")
+}
+
+// ProgramAssignment - links a program to a specific client
+model ProgramAssignment {
+  id         String   @id @default(cuid())
+  programId  String   @map("program_id")
+  clientId   String   @map("client_id")
+  startedAt  DateTime @default(now()) @map("started_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  client  User    @relation("ClientPrograms", fields: [clientId], references: [id])
+
+  // A client can only be assigned a program once (per program)
+  @@unique([programId, clientId])
+  @@map("program_assignments")
+}
+
+// SheetConnection - Google Sheet link per trainer per organization
+model SheetConnection {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  trainerId      String   @map("trainer_id")
+  sheetUrl       String   @map("sheet_url")
+  sheetId        String   @map("sheet_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  trainer      User         @relation("SheetConnections", fields: [trainerId], references: [id])
+
+  // One sheet per trainer per organization
+  @@unique([organizationId, trainerId])
+  @@map("sheet_connections")
+}

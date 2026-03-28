@@ -20,6 +20,7 @@ describe("WorkoutItem", () => {
     userId: "u1",
     createdAt: new Date("2024-01-01"),
     updatedAt: new Date("2024-01-01"),
+    programId: null,
     exercises: [
       {
         id: "we1",
@@ -33,6 +34,7 @@ describe("WorkoutItem", () => {
         order: 0,
         createdAt: new Date("2024-01-01"),
         updatedAt: new Date("2024-01-01"),
+    programId: null,
         exercise: {
           id: "e1",
           name: "Bench Press",
@@ -43,6 +45,7 @@ describe("WorkoutItem", () => {
           imageUrl: null,
           createdAt: new Date("2024-01-01"),
           updatedAt: new Date("2024-01-01"),
+    programId: null,
           userId: null,
         },
       },
@@ -58,6 +61,7 @@ describe("WorkoutItem", () => {
         order: 1,
         createdAt: new Date("2024-01-01"),
         updatedAt: new Date("2024-01-01"),
+    programId: null,
         exercise: {
           id: "e2",
           name: "Dumbbell Rows",
@@ -68,6 +72,7 @@ describe("WorkoutItem", () => {
           imageUrl: null,
           createdAt: new Date("2024-01-01"),
           updatedAt: new Date("2024-01-01"),
+    programId: null,
           userId: null,
         },
       },

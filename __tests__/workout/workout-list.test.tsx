@@ -30,6 +30,7 @@ describe("WorkoutList", () => {
         userId: "u1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        programId: null,
         exercises: [
           {
             id: "we1",
@@ -65,6 +66,7 @@ describe("WorkoutList", () => {
         userId: "u1",
         createdAt: new Date(),
         updatedAt: new Date(),
+        programId: null,
         exercises: [],
       },
     ]
