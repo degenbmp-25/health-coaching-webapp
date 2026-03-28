@@ -454,3 +454,171 @@ body {
   font-size: 13px;
   word-break: break-all;
 }
+
+/* Error Card */
+.error-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  border: 1px solid #ef4444;
+  margin: 20px 0;
+}
+
+.error-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  color: #ef4444;
+}
+
+.error-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.error-message {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--border) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-container {
+  padding-top: 24px;
+}
+
+.skeleton-header {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  padding: 24px 16px 32px;
+  margin: 0 -16px;
+  border-radius: 0 0 24px 24px;
+}
+
+.skeleton-title {
+  height: 28px;
+  width: 160px;
+  margin-bottom: 8px;
+}
+
+.skeleton-subtitle {
+  height: 20px;
+  width: 120px;
+  margin-bottom: 16px;
+}
+
+.skeleton-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.skeleton-tab {
+  flex: 1;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.skeleton-progress {
+  margin-top: 16px;
+}
+
+.skeleton-progress-text {
+  height: 14px;
+  width: 180px;
+  margin-bottom: 8px;
+}
+
+.skeleton-progress-bar {
+  height: 8px;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.skeleton-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 24px;
+  border: 1px solid var(--border);
+}
+
+.skeleton-card-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.skeleton-category {
+  height: 24px;
+  width: 140px;
+}
+
+.skeleton-badge {
+  height: 24px;
+  width: 80px;
+  border-radius: 6px;
+}
+
+.skeleton-video {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.skeleton-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.skeleton-set-row {
+  height: 60px;
+  border-radius: 10px;
+}
+
+.skeleton-button {
+  height: 48px;
+  border-radius: 12px;
+  width: 100%;
+}
+
+/* Auth checking */
+.auth-checking {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-muted);
+}

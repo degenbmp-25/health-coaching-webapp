@@ -1,7 +1,7 @@
 // Google Sheets integration for workout data
 // Uses published CSV for simplicity
 
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSC1zuoJ5orO_jtqeFtCjbO-IUXMXhTe1tcx2REMppG_MIOTCpDWUQsq65Ds1_SXX_oYkqVjQsByTpW/pub?output=csv';
+const SHEET_CSV_URL = process.env.NEXT_PUBLIC_SHEET_CSV_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSC1zuoJ5orO_jtqeFtCjbO-IUXMXhTe1tcx2REMppG_MIOTCpDWUQsq65Ds1_SXX_oYkqVjQsByTpW/pub?output=csv';
 
 export interface Exercise {
   id: string;
@@ -60,113 +60,154 @@ function extractVideoUrl(notes: string): string | undefined {
 }
 
 export async function fetchWorkouts(): Promise<Workout[]> {
-  const response = await fetch(SHEET_CSV_URL);
-  const csv = await response.text();
-  const data = parseCSV(csv);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   
-  const workouts: Workout[] = [];
-  let currentWorkout: { category?: string; name: string; exercises: Exercise[] } | null = null;
-  let currentCategory = '';
-  let exerciseCounter = 0;
-  
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    const firstCell = (row[0] || '').trim();
-    const secondCell = (row[1] || '').trim();
+  try {
+    const response = await fetch(SHEET_CSV_URL, { signal: controller.signal });
+    clearTimeout(timeout);
     
-    // Detect workout headers (e.g., "Workout A (Legs 1)")
-    if (firstCell.startsWith('Workout') && firstCell.includes('(')) {
-      if (currentWorkout && currentWorkout.exercises.length > 0) {
-        workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch workouts: ${response.status}`);
+    }
+    
+    const csv = await response.text();
+    const data = parseCSV(csv);
+    
+    const workouts: Workout[] = [];
+    let currentWorkout: { category?: string; name: string; exercises: Exercise[] } | null = null;
+    let currentCategory = '';
+    let exerciseCounter = 0;
+    
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const firstCell = (row[0] || '').trim();
+      const secondCell = (row[1] || '').trim();
+      
+      // Detect workout headers (e.g., "Workout A (Legs 1)")
+      if (firstCell.startsWith('Workout') && firstCell.includes('(')) {
+        if (currentWorkout && currentWorkout.exercises.length > 0) {
+          workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
+        }
+        currentWorkout = { category: '',
+          name: firstCell.replace(',', '').trim(),
+          exercises: []
+        };
+        currentCategory = '';
+        continue;
       }
-      currentWorkout = { category: '',
-        name: firstCell.replace(',', '').trim(),
-        exercises: []
-      };
-      currentCategory = '';
-      continue;
-    }
-    
-    // Detect category headers
-    if (firstCell === '#' && (secondCell === 'Movement Prep' || 
-        secondCell === 'Elasticity/Power/Speed/Agility/Skill' || 
-        secondCell === 'Resistance' || 
-        secondCell === 'Metabolic/Supplemental/Recovery')) {
-      currentCategory = secondCell;
-      continue;
-    }
-    
-    // Skip meta rows
-    if (firstCell === 'General notes' || firstCell === '#' || firstCell.startsWith('RST=') || firstCell.startsWith('BB=') || firstCell.startsWith('HK=')) {
-      continue;
-    }
-    
-    // Skip empty rows or rows without exercise name
-    if (!row[1] || row[1].trim() === '') {
-      continue;
-    }
-    
-    // Detect exercise rows (start with I, II, III, IV)
-    if (['I', 'II', 'III', 'IV'].includes(firstCell) && row[1]) {
-      const setsReps = row[2] || '';
-      const setsMatch = setsReps.match(/(\d+)x/);
-      const sets = setsMatch ? parseInt(setsMatch[1]) : 1;
-      const reps = setsReps.replace(/^\d+x/, '').replace('RM', ' RM').trim();
       
-      // Load columns: 3,4,5,6,7
-      const load = [row[3], row[4], row[5], row[6], row[7]].filter(l => l && l.trim());
+      // Detect category headers
+      if (firstCell === '#' && (secondCell === 'Movement Prep' || 
+          secondCell === 'Elasticity/Power/Speed/Agility/Skill' || 
+          secondCell === 'Resistance' || 
+          secondCell === 'Metabolic/Supplemental/Recovery')) {
+        currentCategory = secondCell;
+        continue;
+      }
       
-      // Tempo is column 9, Rest is column 10
-      const tempo = row[9] || '';
-      const rest = row[10] || '';
-      const notes = row[11] || '';
+      // Skip meta rows
+      if (firstCell === 'General notes' || firstCell === '#' || firstCell.startsWith('RST=') || firstCell.startsWith('BB=') || firstCell.startsWith('HK=')) {
+        continue;
+      }
       
-      const exercise: Exercise = {
-        id: `e${++exerciseCounter}`,
-        name: row[1] || '',
-        sets,
-        reps,
-        tempo,
-        rest,
-        load,
-        notes,
-        videoUrl: extractVideoUrl(notes),
-        category: currentCategory || 'General'
-      };
+      // Skip empty rows or rows without exercise name
+      if (!row[1] || row[1].trim() === '') {
+        continue;
+      }
       
-      if (currentWorkout) {
-        currentWorkout.exercises.push(exercise);
+      // Detect exercise rows (start with I, II, III, IV)
+      if (['I', 'II', 'III', 'IV'].includes(firstCell) && row[1]) {
+        const setsReps = row[2] || '';
+        const setsMatch = setsReps.match(/(\d+)x/);
+        const sets = setsMatch ? parseInt(setsMatch[1]) : 1;
+        const reps = setsReps.replace(/^\d+x/, '').replace('RM', ' RM').trim();
+        
+        // Load columns: 3,4,5,6,7
+        const load = [row[3], row[4], row[5], row[6], row[7]].filter(l => l && l.trim());
+        
+        // Tempo is column 9, Rest is column 10
+        const tempo = row[9] || '';
+        const rest = row[10] || '';
+        const notes = row[11] || '';
+        
+        const exercise: Exercise = {
+          id: `e${++exerciseCounter}`,
+          name: row[1] || '',
+          sets,
+          reps,
+          tempo,
+          rest,
+          load,
+          notes,
+          videoUrl: extractVideoUrl(notes),
+          category: currentCategory || 'General'
+        };
+        
+        if (currentWorkout) {
+          currentWorkout.exercises.push(exercise);
+        }
       }
     }
+    
+    // Add last workout
+    if (currentWorkout && currentWorkout.exercises.length > 0) {
+      workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
+    }
+    
+    console.log('Parsed workouts:', workouts.map(w => w.name));
+    return workouts;
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw e;
   }
-  
-  // Add last workout
-  if (currentWorkout && currentWorkout.exercises.length > 0) {
-    workouts.push({ ...currentWorkout, id: `w${workouts.length + 1}`, category: currentWorkout.name });
-  }
-  
-  console.log('Parsed workouts:', workouts.map(w => w.name));
-  return workouts;
 }
 
 const LOGS_KEY = 'workout_logs';
 
+/**
+ * Save a workout log entry to localStorage.
+ * Handles QuotaExceededError and other DOMExceptions gracefully.
+ */
 export function saveLog(log: WorkoutLog): void {
-  const logs = getLogs();
-  const existingIndex = logs.findIndex(l => l.exerciseId === log.exerciseId && l.date === log.date);
-  if (existingIndex >= 0) {
-    logs[existingIndex] = log;
-  } else {
-    logs.push(log);
+  try {
+    const logs = getLogs();
+    const existingIndex = logs.findIndex(l => l.exerciseId === log.exerciseId && l.date === log.date);
+    if (existingIndex >= 0) {
+      logs[existingIndex] = log;
+    } else {
+      logs.push(log);
+    }
+    localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+  } catch (e) {
+    // Handle QuotaExceededError, SecurityError, and other DOMExceptions
+    console.error('Failed to save workout log:', e);
   }
-  localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
 }
 
+/**
+ * Get all workout logs from localStorage.
+ * Returns empty array if localStorage is unavailable or corrupted.
+ */
 export function getLogs(): WorkoutLog[] {
-  const stored = localStorage.getItem(LOGS_KEY);
-  return stored ? JSON.parse(stored) : [];
+  try {
+    const stored = localStorage.getItem(LOGS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    // Handle corrupted data or localStorage unavailability
+    console.error('Failed to retrieve workout logs:', e);
+    return [];
+  }
 }
 
 export function getLogForExercise(exerciseId: string, date: string): WorkoutLog | undefined {
-  return getLogs().find(l => l.exerciseId === exerciseId && l.date === date);
+  try {
+    return getLogs().find(l => l.exerciseId === exerciseId && l.date === date);
+  } catch (e) {
+    console.error('Failed to get log for exercise:', e);
+    return undefined;
+  }
 }
