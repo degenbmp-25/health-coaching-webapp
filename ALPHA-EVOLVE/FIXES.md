@@ -60,6 +60,69 @@ Also applied same fix to PATCH handler for consistency.
 
 ---
 
+---
+
+### CRITICAL NEW #1: Goals Route Still Uses clerkId
+**File:** `app/api/users/[userId]/goals/route.ts`
+
+**Problem:** Permission check compared `params.userId !== currentUser.clerkId`, but `params.userId` is now the database UUID, not clerkId.
+
+**Fix:** Changed comparison to use database UUID:
+```typescript
+// Before:
+if (params.userId !== currentUser.clerkId && !student)
+
+// After:
+if (params.userId !== currentUser.id && !student)
+```
+
+---
+
+### CRITICAL NEW #2: Workouts Route Still Uses clerkId
+**File:** `app/api/users/[userId]/workouts/route.ts`
+
+**Problem:** Same `clerkId` comparison issue in both GET and POST handlers.
+
+**Fix:** Changed both comparisons to use database UUID:
+```typescript
+// GET handler - Before:
+if (currentUser.clerkId === params.userId)
+
+// GET handler - After:
+if (currentUser.id === params.userId)
+
+// POST handler - Before:
+if (currentUser.clerkId !== params.userId)
+
+// POST handler - After:
+if (currentUser.id !== params.userId)
+```
+
+---
+
+### HIGH NEW #1: Trainer Client Detail Missing Relations
+**File:** `app/api/users/[userId]/route.ts`
+
+**Problem:** `/trainer/clients/[id]` page expects `programAssignments` and `workoutSessions` in API response, but the trainer query didn't include them.
+
+**Fix:** Added `.include()` for missing relations in the trainer client detail query:
+```typescript
+const targetMembership = await db.organizationMember.findFirst({
+  where: {
+    userId: params.userId,
+    organizationId: requestingUserMembership.organizationId,
+  },
+  include: {
+    user: {
+      select: { id: true, name: true, email: true, image: true },
+      include: { programAssignments: true, workoutSessions: true },
+    },
+  },
+})
+```
+
+---
+
 ## Verification
 
 - TypeScript check: `npx tsc --noEmit` ✓ No errors

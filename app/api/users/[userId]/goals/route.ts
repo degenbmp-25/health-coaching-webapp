@@ -37,7 +37,7 @@ export async function GET(req: Request, { params }: UserGoalsParams) {
     })
 
     // Allow if user is viewing their own goals or is the coach
-    if (params.userId !== currentUser.clerkId && !student) {
+    if (params.userId !== currentUser.id && !student) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 

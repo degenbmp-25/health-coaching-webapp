@@ -49,7 +49,7 @@ export async function GET(
     }
     
     // If the user is looking at their own workouts
-    if (currentUser.clerkId === params.userId) {
+    if (currentUser.id === params.userId) {
       console.log("[USER_WORKOUTS_GET] User requesting their own workouts")
       
       const workouts = await db.workout.findMany({
@@ -150,7 +150,7 @@ export async function POST(
     }
     
     // Check if it's the user creating their own workout or if it's their coach
-    if (currentUser.clerkId !== params.userId) {
+    if (currentUser.id !== params.userId) {
       // Verify the coach-student relationship
       const student = await db.user.findFirst({
         where: {
