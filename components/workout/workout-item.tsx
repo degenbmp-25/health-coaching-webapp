@@ -20,9 +20,9 @@ interface WorkoutItemProps {
 }
 
 export function WorkoutItem({ workout }: WorkoutItemProps) {
-  const muscleGroups = [
-    ...new Set(workout.exercises.map((we) => we.exercise.muscleGroup).filter(Boolean)),
-  ]
+  const muscleGroups = Array.from(
+    new Set(workout.exercises.map((we) => we.exercise.muscleGroup).filter(Boolean))
+  )
   const totalSets = workout.exercises.reduce((sum, we) => sum + we.sets, 0)
 
   return (
