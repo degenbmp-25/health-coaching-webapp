@@ -65,8 +65,10 @@ export default function OrganizationDetailPage({ params }: { params: Promise<{ i
   }, [id, router])
 
   async function removeMember(memberId: string) {
-    const res = await fetch(`/api/organizations/${id}/members/${memberId}`, {
+    const res = await fetch(`/api/organizations/${id}/members`, {
       method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: memberId }),
     })
 
     if (res.ok) {

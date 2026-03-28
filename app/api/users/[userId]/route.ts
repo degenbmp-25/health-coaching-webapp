@@ -24,18 +24,17 @@ export async function GET(
     }
 
     // If user is getting their own details
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (params.userId === user.clerkId) {
+    // Compare database UUIDs since the frontend sends database UUID
+    if (params.userId === user.id) {
       const userDetails = await db.user.findUnique({
         where: {
-          clerkId: params.userId,
+          id: params.userId,
         },
         select: {
           id: true,
           name: true,
           email: true,
           image: true,
-          role: true,
         },
       })
 
@@ -46,31 +45,38 @@ export async function GET(
       return NextResponse.json(userDetails)
     }
     
-    // If a coach is getting their student's details
-    if (user.role === "coach") {
-      // Check if the requested user is one of their students
-      const student = await db.user.findFirst({
+    // If an owner/trainer is getting member details within their organization
+    // Check OrganizationMember table for role (multi-tenant model)
+    const requestingUserMembership = await db.organizationMember.findFirst({
+      where: {
+        userId: user.id,
+        role: { in: ["owner", "trainer"] },
+      },
+    })
+
+    if (requestingUserMembership) {
+      // Check if the requested user is a member of the same organization
+      const targetMembership = await db.organizationMember.findFirst({
         where: {
-          clerkId: params.userId,
-          coachId: user.id,
+          userId: params.userId,
+          organizationId: requestingUserMembership.organizationId,
         },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true },
+          },
         },
       })
 
-      if (student) {
-        return NextResponse.json(student)
+      if (targetMembership) {
+        return NextResponse.json(targetMembership.user)
       }
     }
     
     // Default case: fetch limited public info
     const userDetails = await db.user.findUnique({
       where: {
-        clerkId: params.userId,
+        id: params.userId,
       },
       select: {
         id: true,
@@ -101,8 +107,8 @@ export async function PATCH(
       return user
     }
 
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (user.clerkId !== params.userId) {
+    // Compare database UUIDs since the frontend sends database UUID
+    if (user.id !== params.userId) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
@@ -111,7 +117,7 @@ export async function PATCH(
 
     const updatedUser = await db.user.update({
       where: {
-        clerkId: params.userId,
+        id: params.userId,
       },
       data: {
         name: body.name,
