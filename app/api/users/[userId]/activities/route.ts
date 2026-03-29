@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
 
-// Get activities for a user (accessible by the user or their coach)
+// Get activities for a user (accessible by the user or org trainers/owners)
 export async function GET(
   req: Request,
   { params }: { params: { userId: string } }
@@ -15,43 +15,23 @@ export async function GET(
       return user
     }
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-
-    // Check if user is accessing their own activities or if they're a coach accessing student's activities
-    let hasAccess = false
-
-    if (user.id === params.userId) {
-      hasAccess = true
-    } else if (user.role === "coach") {
-      // Check if the requested user is one of their students
-      const student = await db.user.findFirst({
+    // Authorization: own data or org trainer/owner
+    if (user.id !== params.userId) {
+      const membership = await db.organizationMember.findFirst({
         where: {
-          id: targetUser.id,
-          coachId: user.id,
+          userId: user.id,
+          role: { in: ["owner", "trainer"] },
+          organizationId: params.userId,
         },
       })
-      hasAccess = !!student
-    }
-
-    if (!hasAccess) {
-      return new NextResponse("Forbidden", { status: 403 })
+      if (!membership) {
+        return new NextResponse("Forbidden", { status: 403 })
+      }
     }
 
     const activities = await db.activity.findMany({
       where: {
-        userId: targetUser.id,
+        userId: params.userId,
       },
       include: {
         activityLogs: {
@@ -70,7 +50,7 @@ export async function GET(
   }
 }
 
-// Create a new activity for a user (coaches can create for their students)
+// Create a new activity for a user (org trainers/owners can create for org members)
 export async function POST(
   req: Request,
   { params }: { params: { userId: string } }
@@ -82,38 +62,18 @@ export async function POST(
       return user
     }
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-
-    // Check if user is creating for themselves or if they're a coach creating for their student
-    let hasAccess = false
-
-    if (user.id === params.userId) {
-      hasAccess = true
-    } else if (user.role === "coach") {
-      // Check if the requested user is one of their students
-      const student = await db.user.findFirst({
+    // Authorization: own data or org trainer/owner
+    if (user.id !== params.userId) {
+      const membership = await db.organizationMember.findFirst({
         where: {
-          id: targetUser.id,
-          coachId: user.id,
+          userId: user.id,
+          role: { in: ["owner", "trainer"] },
+          organizationId: params.userId,
         },
       })
-      hasAccess = !!student
-    }
-
-    if (!hasAccess) {
-      return new NextResponse("Forbidden", { status: 403 })
+      if (!membership) {
+        return new NextResponse("Forbidden", { status: 403 })
+      }
     }
 
     const json = await req.json()
@@ -124,7 +84,7 @@ export async function POST(
         name,
         description,
         colorCode,
-        userId: targetUser.id,
+        userId: params.userId,
       },
     })
 
@@ -133,4 +93,4 @@ export async function POST(
     console.error("[USER_ACTIVITIES_POST]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

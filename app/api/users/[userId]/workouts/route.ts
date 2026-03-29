@@ -27,74 +27,33 @@ export async function GET(
 ) {
   try {
     console.log(`[USER_WORKOUTS_GET] Request for userId: ${params.userId}`)
-    
-    const authRes = await requireAuth();
-    if (authRes instanceof NextResponse) return authRes;
-    const currentUser = authRes;
+
+    const authRes = await requireAuth()
+    if (authRes instanceof NextResponse) return authRes
+    const currentUser = authRes
 
     console.log(`[USER_WORKOUTS_GET] Session user: ${currentUser.id}, role: ${currentUser.role}`)
-    
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
 
-    if (!targetUser) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-    
-    // If the user is looking at their own workouts
-    if (currentUser.id === params.userId) {
-      console.log("[USER_WORKOUTS_GET] User requesting their own workouts")
-      
-      const workouts = await db.workout.findMany({
+    // Authorization: own data or org trainer/owner
+    if (currentUser.id !== params.userId) {
+      const membership = await db.organizationMember.findFirst({
         where: {
-          userId: targetUser.id,
-        },
-        include: {
-          exercises: {
-            include: {
-              exercise: true,
-            },
-            orderBy: {
-              order: "asc",
-            },
-          },
-        },
-        orderBy: {
-          updatedAt: "desc",
+          userId: currentUser.id,
+          role: { in: ["owner", "trainer"] },
+          organizationId: params.userId,
         },
       })
-      
-      console.log(`[USER_WORKOUTS_GET] Found ${workouts.length} workouts for user`)
-      return NextResponse.json(workouts)
+      if (!membership) {
+        console.log("[USER_WORKOUTS_GET] Not authorized as org trainer/owner")
+        return new NextResponse("Unauthorized: Not authorized", { status: 403 })
+      }
     }
-    
-    // If a coach is looking at their student's workouts
-    console.log("[USER_WORKOUTS_GET] Coach checking student workouts")
-    
-    const student = await db.user.findFirst({
-      where: {
-        id: targetUser.id,
-        coachId: currentUser.id,
-      },
-    })
-    
-    if (!student) {
-      console.log("[USER_WORKOUTS_GET] Not authorized as student's coach")
-      return new NextResponse("Unauthorized: Not the student's coach", { status: 403 })
-    }
-    
-    console.log("[USER_WORKOUTS_GET] Coach authorized for student")
-    
+
+    console.log("[USER_WORKOUTS_GET] Authorized, fetching workouts")
+
     const workouts = await db.workout.findMany({
       where: {
-        userId: targetUser.id,
+        userId: params.userId,
       },
       include: {
         exercises: {
@@ -105,19 +64,13 @@ export async function GET(
             order: "asc",
           },
         },
-        user: {
-          select: {
-            id: true,
-            name: true,
-          }
-        }
       },
       orderBy: {
         updatedAt: "desc",
       },
     })
-    
-    console.log(`[USER_WORKOUTS_GET] Found ${workouts.length} workouts for student`)
+
+    console.log(`[USER_WORKOUTS_GET] Found ${workouts.length} workouts for user`)
     return NextResponse.json(workouts)
   } catch (error) {
     console.error("[USER_WORKOUTS_GET]", error)
@@ -125,42 +78,27 @@ export async function GET(
   }
 }
 
-// Create workout for a user (either by themselves or by their coach)
+// Create workout for a user (either by themselves or by org trainer/owner)
 export async function POST(
   req: Request,
   { params }: { params: { userId: string } }
 ) {
   try {
-    const authRes = await requireAuth();
-    if (authRes instanceof NextResponse) return authRes;
-    const currentUser = authRes;
+    const authRes = await requireAuth()
+    if (authRes instanceof NextResponse) return authRes
+    const currentUser = authRes
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-    
-    // Check if it's the user creating their own workout or if it's their coach
+    // Authorization: own data or org trainer/owner
     if (currentUser.id !== params.userId) {
-      // Verify the coach-student relationship
-      const student = await db.user.findFirst({
+      const membership = await db.organizationMember.findFirst({
         where: {
-          id: targetUser.id,
-          coachId: currentUser.id,
+          userId: currentUser.id,
+          role: { in: ["owner", "trainer"] },
+          organizationId: params.userId,
         },
       })
-      
-      if (!student) {
-        return new NextResponse("Unauthorized: Not the student's coach", { status: 403 })
+      if (!membership) {
+        return new NextResponse("Unauthorized: Not authorized", { status: 403 })
       }
     }
 
@@ -173,7 +111,7 @@ export async function POST(
       data: {
         name: body.name,
         description: body.description,
-        userId: targetUser.id,
+        userId: params.userId,
         exercises: {
           create: body.exercises.map((exercise) => ({
             exerciseId: exercise.exerciseId,
@@ -196,4 +134,4 @@ export async function POST(
     console.error("[USER_WORKOUTS_POST]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

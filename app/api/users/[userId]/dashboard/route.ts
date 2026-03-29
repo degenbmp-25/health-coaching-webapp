@@ -20,45 +20,32 @@ export async function GET(
     const { searchParams } = new URL(req.url)
     const from = searchParams.get("from")
     const to = searchParams.get("to")
-    
+
     // Default date range (last 30 days)
     const dateRange = dateRangeParams({
       from: from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       to: to || new Date().toISOString(),
     })
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
-      return new NextResponse("User not found", { status: 404 })
+    // Authorization: own data or org trainer/owner
+    if (user.id !== params.userId) {
+      const membership = await db.organizationMember.findFirst({
+        where: {
+          userId: user.id,
+          role: { in: ["owner", "trainer"] },
+          organizationId: params.userId,
+        },
+      })
+      if (!membership) {
+        return new NextResponse("Forbidden", { status: 403 })
+      }
     }
 
-    // Check if the requesting user is the coach of this student
-    const student = await db.user.findFirst({
-      where: {
-        id: targetUser.id,
-        coachId: user.id,
-      },
-    })
-
-    // Allow access if it's the user's own data or if they're the coach
-    if (!student && user.id !== params.userId) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const dashboardData = await getDashboardData(targetUser.id, dateRange)
+    const dashboardData = await getDashboardData(params.userId, dateRange)
 
     return NextResponse.json(dashboardData)
   } catch (error) {
     console.error("[STUDENT_DASHBOARD_GET]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}
