@@ -11,6 +11,7 @@ import { ErrorCard } from '@/components/ui/error-card'
 import { WorkoutSkeleton } from '@/components/workout/workout-skeleton'
 import { EmptyPlaceholder } from '@/components/empty-placeholder'
 import { Icons } from '@/components/icons'
+import { VideoPlayer } from '@/components/workout/mux-player'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,7 @@ export function SheetsWorkoutView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ message: string; retry: () => void } | null>(null)
   const [logs, setLogs] = useState<Map<string, WorkoutLog>>(new Map())
+  const [muxPlaybackIds, setMuxPlaybackIds] = useState<Map<string, string>>(new Map())
 
   // Track which exercise we're asking for empty-confirmation
   const [pendingEmptyComplete, setPendingEmptyComplete] = useState<string | null>(null)
@@ -47,6 +49,22 @@ export function SheetsWorkoutView() {
         logsMap.set(key, log)
       })
       setLogs(logsMap)
+
+      // Fetch mux playback IDs for videos
+      const muxMap = new Map<string, string>()
+      const uniqueVideoUrls = [...new Set(data.flatMap(w => w.exercises.map(e => e.videoUrl)).filter(Boolean))] as string[]
+      await Promise.all(uniqueVideoUrls.map(async (videoUrl) => {
+        try {
+          const res = await fetch(`/api/mux/lookup?videoUrl=${encodeURIComponent(videoUrl)}`)
+          const json = await res.json()
+          if (json.muxPlaybackId) {
+            muxMap.set(videoUrl, json.muxPlaybackId)
+          }
+        } catch (e) {
+          // Ignore lookup errors
+        }
+      }))
+      setMuxPlaybackIds(muxMap)
     } catch (e) {
       setError({
         message: e instanceof Error ? e.message : 'Unable to load workouts. Please check your connection.',
@@ -278,7 +296,12 @@ export function SheetsWorkoutView() {
                             <Icons.play className="h-4 w-4 text-primary" />
                             <span className="text-sm font-medium">Demo Video</span>
                           </div>
-                          {exercise.videoUrl.startsWith('http') ? (
+                          {muxPlaybackIds.get(exercise.videoUrl) ? (
+                            <VideoPlayer 
+                              playbackId={muxPlaybackIds.get(exercise.videoUrl)!} 
+                              title={exercise.name}
+                            />
+                          ) : exercise.videoUrl.startsWith('http') ? (
                             <a
                               href={exercise.videoUrl}
                               target="_blank"
