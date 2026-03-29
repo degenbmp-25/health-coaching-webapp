@@ -3,20 +3,19 @@ import Mux from '@mux/mux-node';
 const muxClient = new Mux({
   tokenId: process.env.MUX_TOKEN_ID!,
   tokenSecret: process.env.MUX_TOKEN_SECRET!,
+  jwtSigningKey: process.env.MUX_SIGNING_KEY_ID,
+  jwtPrivateKey: process.env.MUX_SIGNING_KEY,
 });
 
 export const mux = muxClient;
 
 /**
  * Get a signed playback URL for a Mux asset
- * This generates a token that allows viewing for a specific duration
+ * The Mux client is configured with signing keys at initialization
  */
-export async function getSignedPlaybackUrl(playbackId: string, expirationTime = 3600) {
+export async function getSignedPlaybackUrl(playbackId: string, expiration = '1h') {
   const token = await muxClient.jwt.signPlaybackId(playbackId, {
-    type: 'jwt',
-    keyId: process.env.MUX_SIGNING_KEY_ID!,
-    keyPrivate: process.env.MUX_SIGNING_KEY!,
-    expiration: `${expirationTime}s`,
+    expiration,
   });
   
   return `https://stream.mux.com/${playbackId}.m3u8?token=${token}`;

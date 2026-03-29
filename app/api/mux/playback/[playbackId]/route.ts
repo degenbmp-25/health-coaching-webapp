@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { mux } from '@/lib/mux';
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
@@ -15,18 +12,14 @@ export async function GET(
     // 1. Check if user is logged in (Clerk)
     // 2. Check if user has access to this video (organization membership)
     
-    // For now, we'll generate a signed URL directly
-    // The Mux player will use this playback ID with signed playback
-    const token = await mux.jwt.signPlaybackId(playbackId, {
-      type: 'jwt',
-      keyId: process.env.MUX_SIGNING_KEY_ID!,
-      keyPrivate: process.env.MUX_SIGNING_KEY!,
-      expiration: '1h', // URLs valid for 1 hour
+    // Generate a signed playback URL (valid for 1 hour)
+    const playbackUrl = await mux.jwt.signPlaybackId(playbackId, {
+      expiration: '1h',
     });
 
     return NextResponse.json({
       success: true,
-      playbackUrl: `https://stream.mux.com/${playbackId}.m3u8?token=${token}`,
+      playbackUrl: `https://stream.mux.com/${playbackId}.m3u8?token=${playbackUrl}`,
     });
   } catch (error) {
     console.error('Playback URL error:', error);
