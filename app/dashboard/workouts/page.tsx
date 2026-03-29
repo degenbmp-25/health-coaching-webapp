@@ -2,8 +2,9 @@ import { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 
-import { getUserWorkouts } from "@/lib/api/workouts"
 import { getCurrentUser } from "@/lib/session"
+import { getUserWorkouts } from "@/lib/api/workouts"
+
 import { WorkoutAddButton } from "@/components/workout/workout-add-button"
 import { WorkoutList } from "@/components/workout/workout-list"
 import { WorkoutListSkeleton } from "@/components/workout/workout-list-skeleton"

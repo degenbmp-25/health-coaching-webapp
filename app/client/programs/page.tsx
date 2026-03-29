@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentUser } from "@/lib/session"
+
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 import { Button } from "@/components/ui/button"
@@ -30,11 +30,13 @@ export default function ClientProgramsPage() {
 
   useEffect(() => {
     async function load() {
-      const currentUser = await getCurrentUser()
-      if (!currentUser) {
+      // Fetch current user via API
+      const userRes = await fetch('/api/users/me')
+      if (!userRes.ok) {
         router.push("/signin")
         return
       }
+      const currentUser = await userRes.json()
       setUser(currentUser)
 
       // Fetch client's programs

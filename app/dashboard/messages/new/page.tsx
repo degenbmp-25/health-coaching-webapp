@@ -5,7 +5,7 @@ import { redirect } from "next/navigation"
 import { useRouter } from "next/navigation"
 import * as React from "react"
 
-import { getCurrentUser } from "@/lib/session"
+
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 import { Button } from "@/components/ui/button"

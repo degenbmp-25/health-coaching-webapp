@@ -2,8 +2,9 @@ import { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { format, parseISO } from "date-fns"
 
-import { getUserMeals } from "@/lib/api/meals"
 import { getCurrentUser } from "@/lib/session"
+import { getUserMeals } from "@/lib/api/meals"
+
 import { MealAddButton } from "@/components/meal/meal-add-button"
 import { MealAddSimple } from "@/components/meal/meal-add-simple"
 import { MealList } from "@/components/meal/meal-list"

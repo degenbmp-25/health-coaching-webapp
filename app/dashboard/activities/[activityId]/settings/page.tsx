@@ -1,8 +1,9 @@
 import { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/session"
 
 import { getUserActivity } from "@/lib/api/activities"
-import { getCurrentUser } from "@/lib/session"
+
 import { ActivityEditForm } from "@/components/activity/activity-edit-form"
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"

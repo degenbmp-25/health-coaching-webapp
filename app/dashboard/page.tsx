@@ -2,9 +2,10 @@ import { Metadata } from "next"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 
+import { getCurrentUser } from "@/lib/session"
 import { getDashboardData } from "@/lib/api/dashboard"
 import { getUserActivities } from "@/lib/api/activities"
-import { getCurrentUser } from "@/lib/session"
+
 import { dateRangeParams } from "@/lib/utils"
 import { logColumns } from "@/components/activity/logs/logs-columns"
 import { LineChartComponent } from "@/components/charts/linechart"

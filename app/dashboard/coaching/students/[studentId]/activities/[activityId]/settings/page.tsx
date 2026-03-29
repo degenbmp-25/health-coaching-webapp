@@ -1,6 +1,7 @@
 import { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/session"
+
 import { db } from "@/lib/db"
 
 import { ActivityEditForm } from "@/components/activity/activity-edit-form"

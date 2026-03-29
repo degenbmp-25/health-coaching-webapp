@@ -1,5 +1,6 @@
 import { Metadata } from "next"
 import { redirect } from "next/navigation"
+
 import { getCurrentUser } from "@/lib/session"
 import { db } from "@/lib/db"
 import { Shell } from "@/components/layout/shell"

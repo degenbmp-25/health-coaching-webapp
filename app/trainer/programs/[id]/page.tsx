@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentUser } from "@/lib/session"
+
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 import { Button } from "@/components/ui/button"
@@ -59,11 +59,12 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
 
   useEffect(() => {
     async function load() {
-      const currentUser = await getCurrentUser()
-      if (!currentUser) {
+      const userRes = await fetch('/api/users/me')
+      if (!userRes.ok) {
         router.push("/signin")
         return
       }
+      const currentUser = await userRes.json()
       setUser(currentUser)
 
       const res = await fetch(`/api/programs/${id}`)

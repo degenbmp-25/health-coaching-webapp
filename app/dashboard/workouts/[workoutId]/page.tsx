@@ -1,8 +1,9 @@
 import { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/session"
 
 import { getWorkout } from "@/lib/api/workouts"
-import { getCurrentUser } from "@/lib/session"
+
 import { WorkoutSessionView } from "@/components/workout/workout-session-view"
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"

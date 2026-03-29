@@ -2,9 +2,10 @@ import { Metadata } from "next"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 
+import { getCurrentUser } from "@/lib/session"
 import { getDashboardData } from "@/lib/api/dashboard"
 import { getUserActivities } from "@/lib/api/activities"
-import { getCurrentUser } from "@/lib/session"
+
 import { dateRangeParams } from "@/lib/utils"
 import { ActivityAddButton } from "@/components/activity/activity-add-button"
 import { ActivityList } from "@/components/activity/activity-list"
