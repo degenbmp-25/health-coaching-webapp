@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Return unique playback IDs
-    const playbackIds = [...new Set(exercises.map(e => e.muxPlaybackId).filter(Boolean))];
+    const playbackIds = exercises.map(e => e.muxPlaybackId).filter((id): id is string => id !== null);
 
     return NextResponse.json({
       success: true,
