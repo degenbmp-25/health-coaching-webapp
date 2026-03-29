@@ -25,7 +25,18 @@ import { LuSettings, LuUtensils } from "react-icons/lu"
 import { MdDeleteForever, MdOutlineLogout } from "react-icons/md"
 import { RxDashboard, RxMixerHorizontal } from "react-icons/rx"
 import { IoCloudUpload } from "react-icons/io5"
-import { Dumbbell, type LucideIcon, Image, Target, User, Send, Edit, Clock } from "lucide-react"
+import { 
+  Dumbbell, 
+  type LucideIcon, 
+  Image, 
+  Target, 
+  User, 
+  Send, 
+  Edit, 
+  Clock,
+  Play,
+  ExternalLink 
+} from "lucide-react"
 
 export type IconKeys = keyof typeof icons
 
@@ -80,6 +91,8 @@ const icons = {
   target: Target,
   edit: Edit,
   clock: Clock,
+  play: Play,
+  externalLink: ExternalLink,
 }
 
 export const Icons: IconsType = icons

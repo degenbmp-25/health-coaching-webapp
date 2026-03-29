@@ -173,6 +173,7 @@ model WorkoutExercise {
   weight     Float?
   duration   Int?     // Duration in seconds
   notes      String?
+  videoUrl   String?  @map("video_url")
   order      Int
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

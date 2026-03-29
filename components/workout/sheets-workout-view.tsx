@@ -271,20 +271,24 @@ export function SheetsWorkoutView() {
                         )}
                       </div>
 
-                      {/* Video Placeholder */}
-                      <div className="rounded-md border bg-muted/50 p-4">
-                        {exercise.videoUrl ? (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Icons.activity className="h-4 w-4" />
+                      {/* Video Section */}
+                      {exercise.videoUrl && (
+                        <div className="rounded-md border bg-muted/50 p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icons.play className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-medium">Demo Video</span>
+                          </div>
+                          <a
+                            href={exercise.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline truncate"
+                          >
+                            <Icons.externalLink className="h-4 w-4 shrink-0" />
                             <span className="truncate">{exercise.videoUrl}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Icons.image className="h-4 w-4" />
-                            <span>Demo video placeholder</span>
-                          </div>
-                        )}
-                      </div>
+                          </a>
+                        </div>
+                      )}
 
                       {/* Sets Container */}
                       <div className="space-y-3">
