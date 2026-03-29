@@ -174,6 +174,8 @@ model WorkoutExercise {
   duration   Int?     // Duration in seconds
   notes      String?
   videoUrl   String?  @map("video_url")
+  muxPlaybackId String? @map("mux_playback_id") // Mux streaming playback ID
+  muxAssetId    String? @map("mux_asset_id")    // Mux asset ID for management
   order      Int
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
