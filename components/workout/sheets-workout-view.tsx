@@ -278,15 +278,22 @@ export function SheetsWorkoutView() {
                             <Icons.play className="h-4 w-4 text-primary" />
                             <span className="text-sm font-medium">Demo Video</span>
                           </div>
-                          <a
-                            href={exercise.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline truncate"
-                          >
-                            <Icons.externalLink className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{exercise.videoUrl}</span>
-                          </a>
+                          {exercise.videoUrl.startsWith('http') ? (
+                            <a
+                              href={exercise.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline truncate"
+                            >
+                              <Icons.externalLink className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{exercise.videoUrl}</span>
+                            </a>
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm text-amber-500">
+                              <Icons.externalLink className="h-4 w-4 shrink-0" />
+                              <span className="truncate">Video needs migration: {exercise.videoUrl}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
