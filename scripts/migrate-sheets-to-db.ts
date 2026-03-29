@@ -131,7 +131,6 @@ async function createOrGetExercise(exercise: Exercise, userId: string): Promise<
         name: exercise.name,
         category: exercise.category || 'General',
         muscleGroup: 'Unknown', // Sheets data doesn't have this
-        notes: exercise.notes,
         userId: userId,
       },
     });
