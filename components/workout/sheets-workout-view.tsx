@@ -53,7 +53,7 @@ export function SheetsWorkoutView() {
       // Fetch mux playback IDs for videos
       const muxMap = new Map<string, string>()
       const allVideoUrls = data.flatMap(w => w.exercises.map(e => e.videoUrl))
-      const uniqueVideoUrls = [...new Set(allVideoUrls.filter((url): url is string => Boolean(url)))]
+      const uniqueVideoUrls = Array.from(new Set(allVideoUrls.filter((url): url is string => Boolean(url))))
       await Promise.all(uniqueVideoUrls.map(async (videoUrl) => {
         try {
           const res = await fetch(`/api/mux/lookup?videoUrl=${encodeURIComponent(videoUrl)}`)
