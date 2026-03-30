@@ -1,21 +1,20 @@
+import { ReactNode } from "react"
+
+import Footer from "@/components/layout/footer"
+import { MobileNav } from "@/components/layout/mobile-nav"
+import Navbar from "@/components/layout/navbar"
+import { DashboardNav } from "@/components/pages/dashboard/dashboard-nav"
 import { dashboardLinks, trainerLinks } from "@/config/links"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
-import Footer from "@/components/layout/footer"
-import Navbar from "@/components/layout/navbar"
-import { DashboardNav } from "@/components/pages/dashboard/dashboard-nav"
-import { MobileNav } from "@/components/layout/mobile-nav"
 
-interface DashboardLayoutProps {
-  children: React.ReactNode
+interface TrainerLayoutProps {
+  children: ReactNode
 }
 
-export default async function DashboardLayout({
-  children,
-}: DashboardLayoutProps) {
+export default async function TrainerLayout({ children }: TrainerLayoutProps) {
   const user = await getCurrentUser()
-  
-  // Check if user can access trainer section (owner or trainer role)
+
   let canAccessTrainer = false
   if (user) {
     try {
@@ -29,13 +28,11 @@ export default async function DashboardLayout({
       canAccessTrainer = Boolean(membership)
     } catch (error) {
       console.error("Error checking trainer access:", error)
-      // Default to showing trainer nav for authenticated users if check fails
       canAccessTrainer = true
     }
   }
 
-  // Combine links for mobile nav
-  const mobileLinks = canAccessTrainer 
+  const mobileLinks = canAccessTrainer
     ? [...dashboardLinks.data, ...trainerLinks.data]
     : dashboardLinks.data
 
@@ -46,14 +43,14 @@ export default async function DashboardLayout({
         <aside className="hidden w-[200px] flex-col md:flex">
           <DashboardNav items={dashboardLinks.data} />
           {canAccessTrainer && (
-            <div className="mt-6 pt-6 border-t">
-              <p className="px-3 text-xs font-semibold text-muted-foreground mb-2">TRAINER</p>
+            <div className="mt-6 border-t pt-6">
+              <p className="mb-2 px-3 text-xs font-semibold text-muted-foreground">TRAINER</p>
               <DashboardNav items={trainerLinks.data} />
             </div>
           )}
         </aside>
-        <main className="flex w-full flex-1 flex-col relative">
-          <div className="fixed top-20 left-4 z-50 md:hidden">
+        <main className="relative flex w-full flex-1 flex-col">
+          <div className="fixed left-4 top-20 z-50 md:hidden">
             <MobileNav items={mobileLinks} />
           </div>
           {children}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { MouseEvent, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Shell } from "@/components/layout/shell"
@@ -124,7 +124,15 @@ export default function TrainerClientsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{client.organizationName}</span>
-                    <Button variant="ghost" size="sm" onClick={() => router.push(`/trainer/clients/${client.id}`)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                        event.stopPropagation()
+                        router.push(`/trainer/clients/${client.id}`)
+                      }}
+                    >
                       View →
                     </Button>
                   </div>
