@@ -1,6 +1,7 @@
 import { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/session"
+import { db } from "@/lib/db"
 
 import { getWorkout } from "@/lib/api/workouts"
 
@@ -27,10 +28,61 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     redirect("/signin")
   }
 
-  const workout = await getWorkout(params.workoutId, user.id)
+  // First, try to get the session - the URL param is actually a SESSION ID when coming from Start Workout
+  const session = await db.workoutSession.findFirst({
+    where: {
+      id: params.workoutId,
+      userId: user.id,
+    },
+    include: {
+      workout: {
+        include: {
+          exercises: {
+            include: {
+              exercise: true,
+            },
+            orderBy: {
+              order: "asc",
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // If we found a session, use the workout from it
+  const workout = session?.workout
 
   if (!workout) {
-    notFound()
+    // Fallback: maybe it's an old-style workout ID, try direct fetch
+    const directWorkout = await getWorkout(params.workoutId, user.id)
+    if (!directWorkout) {
+      notFound()
+    }
+    return (
+      <Shell>
+        <DashboardHeader
+          heading={directWorkout.name}
+          text="Track your workout progress."
+        >
+          <div className="flex gap-2">
+            <Link href={`/dashboard/workouts/${directWorkout.id}/edit`}>
+              <Button variant="outline" size="sm">
+                <Icons.edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+            <Link href="/dashboard/workouts">
+              <Button variant="outline" size="sm">
+                <Icons.back className="mr-2 h-4 w-4" />
+                All Workouts
+              </Button>
+            </Link>
+          </div>
+        </DashboardHeader>
+        <WorkoutSessionView workout={directWorkout} />
+      </Shell>
+    )
   }
 
   return (
