@@ -15,11 +15,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find workout exercises with this videoUrl
-    const exercises = await prisma.workoutExercise.findMany({
+    // Find workout exercises - try exact match first, then partial match
+    // (sheets data may have "SMR trap/shoulder.MOV" while DB stores "shoulder.MOV")
+    let exercises = await prisma.workoutExercise.findMany({
       where: { videoUrl },
       select: { muxPlaybackId: true, muxAssetId: true }
     });
+    
+    // If no exact match, try partial match (DB might store shortened version)
+    if (exercises.length === 0) {
+      exercises = await prisma.workoutExercise.findMany({
+        where: { 
+          videoUrl: { endsWith: videoUrl }
+        },
+        select: { muxPlaybackId: true, muxAssetId: true }
+      });
+    }
 
     // Return unique playback IDs
     const playbackIds = exercises.map(e => e.muxPlaybackId).filter((id): id is string => id !== null);
