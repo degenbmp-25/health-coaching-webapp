@@ -4,6 +4,13 @@ import { requireAuth } from "@/lib/auth-utils"
 
 import { db } from "@/lib/db"
 
+// Role constants to avoid magic strings
+const ROLE = {
+  OWNER: "owner",
+  TRAINER: "trainer",
+  CLIENT: "client",
+} as const
+
 const workoutCreateSchema = z.object({
   name: z.string().min(3, {
     message: "Workout name must be at least 3 characters.",
@@ -21,6 +28,46 @@ const workoutCreateSchema = z.object({
   ),
 })
 
+// Shared authorization helper for GET and POST handlers
+async function authorizeWorkoutAccess(
+  currentUserId: string,
+  targetUserId: string
+): Promise<{ authorized: boolean; targetMembership: { organizationId: string } | null }> {
+  // If accessing own data, no org check needed
+  if (currentUserId === targetUserId) {
+    const targetMembership = await db.organizationMember.findFirst({
+      where: { userId: targetUserId },
+      select: { organizationId: true },
+    });
+    return { authorized: true, targetMembership };
+  }
+
+  // Get target user's organization membership
+  const targetMembership = await db.organizationMember.findFirst({
+    where: { userId: targetUserId },
+    select: { organizationId: true },
+  });
+
+  if (!targetMembership) {
+    return { authorized: false, targetMembership: null };
+  }
+
+  // Check if current user is trainer/owner in the SAME org as target user
+  const membership = await db.organizationMember.findFirst({
+    where: {
+      userId: currentUserId,
+      role: { in: [ROLE.OWNER, ROLE.TRAINER] },
+      organizationId: targetMembership.organizationId,
+    },
+  });
+
+  if (!membership) {
+    return { authorized: false, targetMembership };
+  }
+
+  return { authorized: true, targetMembership };
+}
+
 export async function GET(
   req: Request,
   { params }: { params: { userId: string } }
@@ -34,41 +81,90 @@ export async function GET(
 
     console.log(`[USER_WORKOUTS_GET] Session user: ${currentUser.id}, role: ${currentUser.role}`)
 
-    // Authorization: own data or org trainer/owner
-    if (currentUser.id !== params.userId) {
-      const membership = await db.organizationMember.findFirst({
-        where: {
-          userId: currentUser.id,
-          role: { in: ["owner", "trainer"] },
-          organizationId: params.userId,
-        },
-      })
-      if (!membership) {
-        console.log("[USER_WORKOUTS_GET] Not authorized as org trainer/owner")
-        return new NextResponse("Unauthorized: Not authorized", { status: 403 })
-      }
+    // HIGH #1 FIX: Reuse authorization result instead of fetching targetMembership twice
+    const { authorized, targetMembership } = await authorizeWorkoutAccess(
+      currentUser.id,
+      params.userId
+    );
+
+    if (!authorized) {
+      console.log("[USER_WORKOUTS_GET] Not authorized to access this user's workouts")
+      return new NextResponse("Unauthorized", { status: 403 })
     }
 
     console.log("[USER_WORKOUTS_GET] Authorized, fetching workouts")
 
-    const workouts = await db.workout.findMany({
-      where: {
-        userId: params.userId,
-      },
-      include: {
-        exercises: {
+    // HIGH #3 FIX: Include user relation in workout results
+    let workouts;
+    if (targetMembership) {
+      // User is in an org — query via program assignments
+      const programAssignments = await db.programAssignment.findMany({
+        where: { clientId: params.userId },
+        select: { programId: true },
+      });
+
+      const programIds = programAssignments.map((pa) => pa.programId);
+
+      // HIGH #4 FIX: If no program assignments, fall back to legacy userId query
+      if (programIds.length === 0) {
+        workouts = await db.workout.findMany({
+          where: { userId: params.userId },
           include: {
-            exercise: true,
+            exercises: {
+              include: {
+                exercise: true,
+              },
+              orderBy: {
+                order: "asc",
+              },
+            },
+            user: { select: { id: true, name: true } },
           },
           orderBy: {
-            order: "asc",
+            updatedAt: "desc",
           },
+        });
+      } else {
+        workouts = await db.workout.findMany({
+          where: {
+            programId: { in: programIds },
+          },
+          include: {
+            exercises: {
+              include: {
+                exercise: true,
+              },
+              orderBy: {
+                order: "asc",
+              },
+            },
+            user: { select: { id: true, name: true } },
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+        });
+      }
+    } else {
+      // Fallback to legacy userId query
+      workouts = await db.workout.findMany({
+        where: { userId: params.userId },
+        include: {
+          exercises: {
+            include: {
+              exercise: true,
+            },
+            orderBy: {
+              order: "asc",
+            },
+          },
+          user: { select: { id: true, name: true } },
         },
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-    })
+        orderBy: {
+          updatedAt: "desc",
+        },
+      });
+    }
 
     console.log(`[USER_WORKOUTS_GET] Found ${workouts.length} workouts for user`)
     return NextResponse.json(workouts)
@@ -88,18 +184,14 @@ export async function POST(
     if (authRes instanceof NextResponse) return authRes
     const currentUser = authRes
 
-    // Authorization: own data or org trainer/owner
-    if (currentUser.id !== params.userId) {
-      const membership = await db.organizationMember.findFirst({
-        where: {
-          userId: currentUser.id,
-          role: { in: ["owner", "trainer"] },
-          organizationId: params.userId,
-        },
-      })
-      if (!membership) {
-        return new NextResponse("Unauthorized: Not authorized", { status: 403 })
-      }
+    // HIGH #1 FIX: Reuse authorization helper instead of duplicating logic
+    const { authorized, targetMembership } = await authorizeWorkoutAccess(
+      currentUser.id,
+      params.userId
+    );
+
+    if (!authorized) {
+      return new NextResponse("Unauthorized", { status: 403 })
     }
 
     // Get the request body and validate it
@@ -122,6 +214,17 @@ export async function POST(
             order: exercise.order,
           })),
         },
+      },
+      include: {
+        exercises: {
+          include: {
+            exercise: true,
+          },
+          orderBy: {
+            order: "asc",
+          },
+        },
+        user: { select: { id: true, name: true } },
       },
     })
 
