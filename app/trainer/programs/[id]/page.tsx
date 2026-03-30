@@ -11,6 +11,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface Workout {
   id: string
@@ -47,6 +55,13 @@ interface Program {
   }>
 }
 
+interface AvailableWorkout {
+  id: string
+  name: string
+  description: string | null
+  exerciseCount: number
+}
+
 export default function TrainerProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [user, setUser] = useState<any>(null)
@@ -54,6 +69,12 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
   const [loading, setLoading] = useState(true)
   const [assignEmail, setAssignEmail] = useState("")
   const [assigning, setAssigning] = useState(false)
+  const [addWorkoutsOpen, setAddWorkoutsOpen] = useState(false)
+  const [availableWorkouts, setAvailableWorkouts] = useState<AvailableWorkout[]>([])
+  const [selectedWorkoutIds, setSelectedWorkoutIds] = useState<string[]>([])
+  const [loadingWorkouts, setLoadingWorkouts] = useState(false)
+  const [savingWorkouts, setSavingWorkouts] = useState(false)
+  const [removingWorkoutId, setRemovingWorkoutId] = useState<string | null>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -122,6 +143,82 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
     setAssigning(false)
   }
 
+  async function openAddWorkoutsDialog() {
+    setLoadingWorkouts(true)
+    setSelectedWorkoutIds([])
+    
+    // Fetch all workouts available to this trainer
+    const res = await fetch("/api/workouts")
+    if (res.ok) {
+      const data = await res.json()
+      // Filter out workouts already in the program
+      const programWorkoutIds = new Set(program?.workouts.map(w => w.id) || [])
+      const available = (Array.isArray(data) ? data : data.workouts || [])
+        .filter((w: any) => !programWorkoutIds.has(w.id))
+        .map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          description: w.description,
+          exerciseCount: w.exercises?.length || 0,
+        }))
+      setAvailableWorkouts(available)
+    }
+    
+    setLoadingWorkouts(false)
+    setAddWorkoutsOpen(true)
+  }
+
+  async function saveWorkouts() {
+    if (!program || selectedWorkoutIds.length === 0) return
+    
+    setSavingWorkouts(true)
+    
+    // Use atomic add operation - no read-then-write race condition
+    const res = await fetch(`/api/programs/${program.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addWorkoutIds: selectedWorkoutIds }),
+    })
+    
+    if (res.ok) {
+      // Refresh program data
+      const programRes = await fetch(`/api/programs/${id}`)
+      if (programRes.ok) {
+        const data = await programRes.json()
+        setProgram(data)
+      }
+      toast({ title: "Workouts added to program" })
+      setAddWorkoutsOpen(false)
+    } else {
+      toast({ title: "Failed to add workouts", variant: "destructive" })
+    }
+    setSavingWorkouts(false)
+  }
+
+  async function removeWorkout(workoutId: string) {
+    if (!program) return
+    
+    setRemovingWorkoutId(workoutId)
+    
+    // Use atomic remove operation - no read-then-write race condition
+    const res = await fetch(`/api/programs/${program.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeWorkoutIds: [workoutId] }),
+    })
+    
+    if (res.ok) {
+      setProgram({
+        ...program,
+        workouts: program.workouts.filter(w => w.id !== workoutId),
+      })
+      toast({ title: "Workout removed from program" })
+    } else {
+      toast({ title: "Failed to remove workout", variant: "destructive" })
+    }
+    setRemovingWorkoutId(null)
+  }
+
   if (loading || !program) {
     return (
       <Shell>
@@ -145,8 +242,15 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Workouts in Program</CardTitle>
-            <CardDescription>{program.workouts.length} workouts</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Workouts in Program</CardTitle>
+                <CardDescription>{program.workouts.length} workouts</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={openAddWorkoutsDialog}>
+                + Add Workouts
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {program.workouts.length === 0 ? (
@@ -165,9 +269,19 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
                         <Badge variant="outline">{index + 1}</Badge>
                         <h3 className="font-medium">{workout.name}</h3>
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        {workout.exercises.length} exercises
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          {workout.exercises.length} exercises
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeWorkout(workout.id)}
+                          disabled={removingWorkoutId === workout.id}
+                        >
+                          {removingWorkoutId === workout.id ? "..." : "Remove"}
+                        </Button>
+                      </div>
                     </div>
                     {workout.exercises.length > 0 && (
                       <div className="text-sm text-muted-foreground">
@@ -223,6 +337,77 @@ export default function TrainerProgramDetailPage({ params }: { params: Promise<{
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Workouts Dialog */}
+      <Dialog open={addWorkoutsOpen} onOpenChange={setAddWorkoutsOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Workouts to Program</DialogTitle>
+            <DialogDescription>
+              Select workouts to add to {program.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {loadingWorkouts ? (
+            <div className="py-8 text-center text-muted-foreground">Loading workouts...</div>
+          ) : availableWorkouts.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground mb-4">No available workouts to add</p>
+              <Button variant="outline" onClick={() => router.push("/dashboard/workouts")}>
+                Create a Workout
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {availableWorkouts.map((workout) => (
+                <label
+                  key={workout.id}
+                  className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (selectedWorkoutIds.includes(workout.id)) {
+                        setSelectedWorkoutIds(selectedWorkoutIds.filter(id => id !== workout.id))
+                      } else {
+                        setSelectedWorkoutIds([...selectedWorkoutIds, workout.id])
+                      }
+                    }}
+                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                      selectedWorkoutIds.includes(workout.id)
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground"
+                    }`}
+                  >
+                    {selectedWorkoutIds.includes(workout.id) && (
+                      <span className="text-xs">✓</span>
+                    )}
+                  </button>
+                  <div className="flex-1">
+                    <div className="font-medium">{workout.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {workout.exerciseCount} exercises
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setAddWorkoutsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveWorkouts}
+              disabled={selectedWorkoutIds.length === 0 || savingWorkouts}
+            >
+              {savingWorkouts ? "Saving..." : `Add ${selectedWorkoutIds.length} Workout${selectedWorkoutIds.length !== 1 ? 's' : ''}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Shell>
   )
 }

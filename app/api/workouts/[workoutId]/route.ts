@@ -14,6 +14,8 @@ const workoutPatchSchema = z.object({
     message: "Workout name must be at least 3 characters.",
   }),
   description: z.string().optional(),
+  weekNumber: z.number().int().min(1).optional().nullable(),
+  dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
   exercises: z.array(
     z.object({
       exerciseId: z.string(),
@@ -44,33 +46,32 @@ export async function PATCH(
     const json = await req.json()
     const body = workoutPatchSchema.parse(json)
 
-    // Verify user owns the workout OR is the coach of the workout owner
+    // Fetch workout with program for multi-tenant auth check
     const workout = await db.workout.findFirst({
-      where: {
-        id: params.workoutId,
-        OR: [
-          // User owns the workout
-          { userId: user.id },
-          // User is a coach and the workout belongs to their student
-          {
-            user: {
-              coachId: user.id,
-            }
-          }
-        ]
-      },
+      where: { id: params.workoutId },
       include: {
-        user: {
-          select: {
-            id: true,
-            coachId: true,
-          }
-        }
-      }
+        program: {
+          include: {
+            assignments: {
+              where: { clientId: user.id },
+              select: { id: true },
+            },
+          },
+        },
+      },
     })
 
     if (!workout) {
-      return new Response("Unauthorized", { status: 403 })
+      return new Response("Not Found", { status: 404 })
+    }
+
+    // Check authorization: user owns workout OR is assigned to the program
+    const isOwner = workout.userId === user.id
+    const isAssignedToProgram = workout.program?.assignments &&
+      workout.program.assignments.length > 0
+
+    if (!isOwner && !isAssignedToProgram) {
+      return new Response("Forbidden", { status: 403 })
     }
 
     // Update the workout
@@ -81,6 +82,8 @@ export async function PATCH(
       data: {
         name: body.name,
         description: body.description,
+        weekNumber: body.weekNumber,
+        dayOfWeek: body.dayOfWeek,
         exercises: {
           deleteMany: {},
           create: body.exercises.map((exercise) => ({
@@ -117,23 +120,32 @@ export async function DELETE(
       return new Response("Unauthorized", { status: 403 })
     }
 
-    // Verify user owns the workout OR is the coach of the workout owner
+    // Fetch workout with program for multi-tenant auth check
     const workout = await db.workout.findFirst({
-      where: {
-        id: params.workoutId,
-        OR: [
-          { userId: user.id },
-          {
-            user: {
-              coachId: user.id,
+      where: { id: params.workoutId },
+      include: {
+        program: {
+          include: {
+            assignments: {
+              where: { clientId: user.id },
+              select: { id: true },
             },
           },
-        ],
+        },
       },
     })
 
     if (!workout) {
-      return new Response("Unauthorized", { status: 403 })
+      return new Response("Not Found", { status: 404 })
+    }
+
+    // Check authorization: user owns workout OR is assigned to the program
+    const isOwner = workout.userId === user.id
+    const isAssignedToProgram = workout.program?.assignments &&
+      workout.program.assignments.length > 0
+
+    if (!isOwner && !isAssignedToProgram) {
+      return new Response("Forbidden", { status: 403 })
     }
 
     await db.workout.delete({
@@ -150,4 +162,4 @@ export async function DELETE(
 
     return new Response(null, { status: 500 })
   }
-} 
+}

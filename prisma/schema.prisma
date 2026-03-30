@@ -142,6 +142,10 @@ model Workout {
   programId String?  @map("program_id")
   program   Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
 
+  // Week/periodization support
+  weekNumber Int?     @map("week_number")    // Which week of the program this workout belongs to (1, 2, 3...)
+  dayOfWeek  Int?     @map("day_of_week")    // Day within the week (0=Sun, 1=Mon, ..., 6=Sat)
+
   @@map(name: "workouts")
 }
 

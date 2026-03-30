@@ -47,8 +47,20 @@ export async function GET(
       return new Response("Forbidden", { status: 403 })
     }
 
+    // Check for week filter in query params
+    const { searchParams } = new URL(req.url)
+    const weekFilter = searchParams.get("week")
+
+    const whereClause: any = { programId: params.programId }
+    if (weekFilter !== null) {
+      const weekNum = parseInt(weekFilter, 10)
+      if (!isNaN(weekNum)) {
+        whereClause.weekNumber = weekNum
+      }
+    }
+
     const workouts = await db.workout.findMany({
-      where: { programId: params.programId },
+      where: whereClause,
       include: {
         exercises: {
           include: {
@@ -62,7 +74,11 @@ export async function GET(
           select: { sessions: true },
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [
+        { weekNumber: "asc" },
+        { dayOfWeek: "asc" },
+        { createdAt: "asc" },
+      ],
     })
 
     // Get user's completion status for these workouts
@@ -87,6 +103,19 @@ export async function GET(
       _count: undefined,
     }))
 
+    // Group workouts by week if no week filter applied
+    let groupedWorkouts: Record<number, typeof workoutsWithStatus> | null = null
+    if (weekFilter === null) {
+      groupedWorkouts = {}
+      for (const workout of workoutsWithStatus) {
+        const week = workout.weekNumber ?? 0
+        if (!groupedWorkouts[week]) {
+          groupedWorkouts[week] = []
+        }
+        groupedWorkouts[week].push(workout)
+      }
+    }
+
     return NextResponse.json({
       program: {
         id: program.id,
@@ -94,6 +123,7 @@ export async function GET(
         description: program.description,
       },
       workouts: workoutsWithStatus,
+      groupedByWeek: groupedWorkouts,
     })
   } catch (error) {
     console.error("Error fetching program workouts:", error)

@@ -13,6 +13,8 @@ interface Workout {
   id: string
   name: string
   description: string | null
+  weekNumber: number | null
+  dayOfWeek: number | null
   exercises: Array<{
     id: string
     exercise: { id: string; name: string; category: string; muscleGroup: string | null }
@@ -25,11 +27,16 @@ interface Workout {
   sessionCount: number
 }
 
+interface GroupedWorkouts {
+  [week: number]: Workout[]
+}
+
 export default function ClientProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [user, setUser] = useState<any>(null)
-  const [program, setProgram] = useState<{ program: { id: string; name: string; description: string | null }; workouts: Workout[] } | null>(null)
+  const [program, setProgram] = useState<{ program: { id: string; name: string; description: string | null }; workouts: Workout[]; groupedByWeek: GroupedWorkouts | null } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -84,6 +91,33 @@ export default function ClientProgramDetailPage({ params }: { params: Promise<{ 
     ? Math.round((completedCount / program.workouts.length) * 100)
     : 0
 
+  // Get unique weeks for filter
+  const weekSet = new Set<number>()
+  program.workouts.forEach((w) => weekSet.add(w.weekNumber ?? 0))
+  const weeks = Array.from(weekSet).sort((a, b) => a - b)
+
+  // Determine which workouts to show based on filter
+  const displayedWorkouts = selectedWeek !== null
+    ? program.workouts.filter((w) => (w.weekNumber ?? 0) === selectedWeek)
+    : program.workouts
+
+  // Group displayed workouts by week for rendering
+  const displayedGrouped: GroupedWorkouts = {}
+  for (const workout of displayedWorkouts) {
+    const week = workout.weekNumber ?? 0
+    if (!displayedGrouped[week]) {
+      displayedGrouped[week] = []
+    }
+    displayedGrouped[week].push(workout)
+  }
+
+  const weekNames: Record<number, string> = {
+    0: "Unassigned",
+  }
+  for (let i = 1; i <= 52; i++) {
+    weekNames[i] = `Week ${i}`
+  }
+
   return (
     <Shell>
       <DashboardHeader heading={program.program.name} text={program.program.description || "Your workout program"}>
@@ -110,42 +144,87 @@ export default function ClientProgramDetailPage({ params }: { params: Promise<{ 
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
-        {program.workouts.map((workout, index) => (
-          <Card key={workout.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Badge variant={workout.isCompleted ? "default" : "outline"}>
-                    {workout.isCompleted ? "✓" : index + 1}
-                  </Badge>
-                  <div>
-                    <CardTitle className="text-base">{workout.name}</CardTitle>
-                    <CardDescription>{workout.exercises.length} exercises</CardDescription>
-                  </div>
-                </div>
-                <Button
-                  variant={workout.isCompleted ? "outline" : "default"}
-                  onClick={() => startWorkout(workout.id)}
-                >
-                  {workout.isCompleted ? "Redo" : "Start"}
-                </Button>
+      {/* Week Filter */}
+      {weeks.length > 1 && (
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <Button
+            variant={selectedWeek === null ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedWeek(null)}
+          >
+            All Weeks
+          </Button>
+          {weeks.map((week) => (
+            <Button
+              key={week}
+              variant={selectedWeek === week ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedWeek(week)}
+            >
+              {weekNames[week] || `Week ${week}`}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {/* Workouts grouped by week */}
+      <div className="space-y-6">
+        {Object.entries(displayedGrouped)
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([week, workouts]) => (
+            <div key={week}>
+              {selectedWeek === null && (
+                <h2 className="text-lg font-semibold mb-3">
+                  {weekNames[Number(week)] || `Week ${week}`}
+                </h2>
+              )}
+              <div className="space-y-4">
+                {workouts.map((workout: Workout, index: number) => {
+                  // Find global index for display
+                  const globalIndex = program.workouts.findIndex((w) => w.id === workout.id)
+                  return (
+                    <Card key={workout.id}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge variant={workout.isCompleted ? "default" : "outline"}>
+                              {workout.isCompleted ? "✓" : globalIndex + 1}
+                            </Badge>
+                            <div>
+                              <CardTitle className="text-base">{workout.name}</CardTitle>
+                              <CardDescription>
+                                {workout.exercises.length} exercises
+                                {workout.weekNumber !== null && ` • ${weekNames[workout.weekNumber]}`}
+                                {workout.dayOfWeek !== null && ` • ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][workout.dayOfWeek]}`}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          <Button
+                            variant={workout.isCompleted ? "outline" : "default"}
+                            onClick={() => startWorkout(workout.id)}
+                          >
+                            {workout.isCompleted ? "Redo" : "Start"}
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-1">
+                          {workout.exercises.map((ex) => (
+                            <div key={ex.id} className="flex justify-between text-sm">
+                              <span>{ex.exercise.name}</span>
+                              <span className="text-muted-foreground">
+                                {ex.sets}×{ex.reps}{ex.weight ? ` @ ${ex.weight}lbs` : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1">
-                {workout.exercises.map((ex) => (
-                  <div key={ex.id} className="flex justify-between text-sm">
-                    <span>{ex.exercise.name}</span>
-                    <span className="text-muted-foreground">
-                      {ex.sets}×{ex.reps}{ex.weight ? ` @ ${ex.weight}lbs` : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          ))}
       </div>
     </Shell>
   )

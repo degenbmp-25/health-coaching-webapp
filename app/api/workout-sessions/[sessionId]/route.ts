@@ -29,12 +29,36 @@ export async function PATCH(
       return new Response("Unauthorized", { status: 403 })
     }
 
+    // Fetch session with workout and program info for authorization
     const session = await db.workoutSession.findFirst({
-      where: { id: params.sessionId, userId: user.id },
+      where: { id: params.sessionId },
+      include: {
+        workout: {
+          include: {
+            program: {
+              include: {
+                assignments: {
+                  where: { clientId: user.id },
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
+      },
     })
 
     if (!session) {
       return new Response("Not Found", { status: 404 })
+    }
+
+    // Check authorization: user owns session OR is assigned to the program
+    const isOwner = session.userId === user.id
+    const isAssignedToProgram = session.workout.program?.assignments &&
+      session.workout.program.assignments.length > 0
+
+    if (!isOwner && !isAssignedToProgram) {
+      return new Response("Forbidden", { status: 403 })
     }
 
     const json = await req.json()
@@ -105,16 +129,28 @@ export async function GET(
       return new Response("Unauthorized", { status: 403 })
     }
 
+    // Fetch session with workout and program info for authorization
     const session = await db.workoutSession.findFirst({
-      where: {
-        id: params.sessionId,
-        OR: [
-          { userId: user.id },
-          { workout: { userId: user.id } },
-          { user: { coachId: user.id } },
-        ],
-      },
+      where: { id: params.sessionId },
       include: {
+        workout: {
+          include: {
+            exercises: {
+              include: {
+                exercise: true,
+              },
+              orderBy: { order: "asc" },
+            },
+            program: {
+              include: {
+                assignments: {
+                  where: { clientId: user.id },
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
         setLogs: {
           include: {
             workoutExercise: {
@@ -130,16 +166,6 @@ export async function GET(
             { setNumber: "asc" },
           ],
         },
-        workout: {
-          include: {
-            exercises: {
-              include: {
-                exercise: true,
-              },
-              orderBy: { order: "asc" },
-            },
-          },
-        },
         user: {
           select: { id: true, name: true, email: true },
         },
@@ -148,6 +174,15 @@ export async function GET(
 
     if (!session) {
       return new Response("Not Found", { status: 404 })
+    }
+
+    // Check authorization: user owns session OR is assigned to the program
+    const isOwner = session.userId === user.id
+    const isAssignedToProgram = session.workout.program?.assignments &&
+      session.workout.program.assignments.length > 0
+
+    if (!isOwner && !isAssignedToProgram) {
+      return new Response("Forbidden", { status: 403 })
     }
 
     return Response.json(session)

@@ -1,328 +1,258 @@
-# Alpha-Evolve SPEC.md - Habithletics Workout Query Fix
+# Habithletics Alpha-Evolve Specification
 
-**Project:** habithletics-redesign-evolve  
-**Date:** 2026-03-30  
-**Architect:** Architect Agent  
-**Status:** READY FOR BUILDER
+## Issue 1: Non-functional Buttons
 
----
+### Root Cause Analysis
 
-## Problem Summary
+#### Button: "Start Workout" (Client Program Detail Page)
+**File:** `app/client/programs/[id]/page.tsx` → `startWorkout()` function
 
-`getUserWorkouts()` queries `WHERE userId = userId`, but the multi-tenant schema stores workouts on **Programs**, not directly on users. Workouts are accessible through:
-- **Client** → `ProgramAssignment` → `Program` → `Workout`
-- **Trainer/Owner** → `OrganizationMember` → `Organization` → `Program` → `Workout`
-
----
-
-## Data Model Relationships
-
-```
-Organization (1) ──── (many) Program
-    │                       │
-    │                       │
-OrganizationMember    Workout (via programId)
-    │                       │
-    │                       │
-    └── User ─── ProgramAssignment ── Program
-```
-
-**Key fields:**
-- `Workout.programId` → links workout to a Program (nullable, legacy workouts may have null)
-- `ProgramAssignment.clientId` → links a client User to a Program
-- `OrganizationMember.userId` + `role` ("owner"|"trainer"|"client") → user's role in an org
-
----
-
-## Fix #1: `lib/api/workouts.ts` — Replace `getUserWorkouts()`
-
-**Replace the entire `getUserWorkouts()` function** with a multi-tenant-aware version that determines the user's role and queries accordingly.
-
-### New Implementation
+**Problem:** The `POST /api/workout-sessions` endpoint has a flawed authorization check:
 
 ```typescript
-export async function getUserWorkouts(userId: string) {
-  // Step 1: Find the user's organization membership(s)
-  const memberships = await db.organizationMember.findMany({
-    where: { userId },
-    select: { organizationId: true, role: true },
-  });
-
-  // Step 2: If no org membership, fall back to legacy userId query (backward compat)
-  if (memberships.length === 0) {
-    return await db.workout.findMany({
-      where: { userId },
-      include: {
-        exercises: {
-          include: { exercise: true },
-          orderBy: { order: "asc" },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-  }
-
-  // Step 3: Check if user is a client (client role in any org)
-  const isClient = memberships.some((m) => m.role === "client");
-  const isTrainerOrOwner = memberships.some((m) =>
-    ["owner", "trainer"].includes(m.role)
-  );
-
-  // STEP 4A: CLIENT — get workouts from assigned programs
-  if (isClient && !isTrainerOrOwner) {
-    const programIds = await db.programAssignment.findMany({
-      where: { clientId: userId },
-      select: { programId: true },
-    });
-
-    return await db.workout.findMany({
-      where: {
-        programId: { in: programIds.map((p) => p.programId) },
-      },
-      include: {
-        exercises: {
-          include: { exercise: true },
-          orderBy: { order: "asc" },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-  }
-
-  // STEP 4B: TRAINER/OWNER — get workouts from all programs in their org(s)
-  const orgIds = memberships.map((m) => m.organizationId);
-
-  const programIds = await db.program.findMany({
-    where: { organizationId: { in: orgIds } },
-    select: { id: true },
-  });
-
-  return await db.workout.findMany({
-    where: {
-      programId: { in: programIds.map((p) => p.id) },
-    },
-    include: {
-      exercises: {
-        include: { exercise: true },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-}
-```
-
----
-
-## Fix #2: `lib/api/workouts.ts` — Add `getUserWorkoutsByRole()`
-
-Add a new helper function for explicit role-based queries (useful for dashboard tabs):
-
-```typescript
-/**
- * Get workouts for a client user (via ProgramAssignments)
- */
-export async function getClientWorkouts(clientId: string) {
-  const programIds = await db.programAssignment.findMany({
-    where: { clientId },
-    select: { programId: true },
-  });
-
-  return await db.workout.findMany({
-    where: {
-      programId: { in: programIds.map((p) => p.programId) },
-    },
-    include: {
-      exercises: {
-        include: { exercise: true },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-}
-
-/**
- * Get workouts for a trainer/owner (via their organization's programs)
- */
-export async function getTrainerWorkouts(trainerId: string) {
-  // Get all orgs where user is owner or trainer
-  const memberships = await db.organizationMember.findMany({
-    where: {
-      userId: trainerId,
-      role: { in: ["owner", "trainer"] },
-    },
-    select: { organizationId: true },
-  });
-
-  if (memberships.length === 0) {
-    return [];
-  }
-
-  const orgIds = memberships.map((m) => m.organizationId);
-
-  const programIds = await db.program.findMany({
-    where: { organizationId: { in: orgIds } },
-    select: { id: true },
-  });
-
-  return await db.workout.findMany({
-    where: {
-      programId: { in: programIds.map((p) => p.id) },
-    },
-    include: {
-      exercises: {
-        include: { exercise: true },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-}
-```
-
----
-
-## Fix #3: `app/api/users/[userId]/workouts/route.ts` — Fix API Authorization
-
-The GET handler's authorization logic has a bug: it checks `organizationId: params.userId`, but `organizationId` is a UUID, not a userId. The intent is to allow trainers/owners of the target user's organization to access that user's workouts.
-
-**Current (BROKEN) authorization check:**
-```typescript
-const membership = await db.organizationMember.findFirst({
+// /api/workout-sessions/route.ts line ~25
+const workout = await db.workout.findFirst({
   where: {
-    userId: currentUser.id,
-    role: { in: ["owner", "trainer"] },
-    organizationId: params.userId, // ← WRONG: params.userId is a userId, not orgId
+    id: workoutId,
+    OR: [
+      { userId: user.id },
+      { user: { coachId: user.id } },
+    ],
   },
 })
 ```
 
-**Corrected approach:** A trainer/owner should be able to access workouts for users in their organization. We need to first find the target user's organization membership, then check if the current user is a trainer/owner in the same organization.
+**Why it fails:**
+- In the multi-tenant model, program workouts are owned by the **trainer** (their `userId`), not the client
+- The `coachId` relationship is legacy (old model) - multi-tenant uses `OrganizationMember` instead
+- A client accessing a program workout matches **neither condition** → returns 404
+- The client gets no feedback - the button silently fails
 
-**Replace the authorization block in GET handler with:**
-```typescript
-// Authorization: own data, or org trainer/owner for target user
-if (currentUser.id !== params.userId) {
-  // Get target user's organization membership
-  const targetMembership = await db.organizationMember.findFirst({
-    where: { userId: params.userId },
-    select: { organizationId: true },
-  });
+#### Button: "Manage →" (Trainer Programs List)
+**Status:** ✅ **WORKS** - routes to `/trainer/programs/[id]` correctly
 
-  if (!targetMembership) {
-    return new NextResponse("Unauthorized: User not in organization", { status: 403 });
-  }
+#### Button: "Assign Program" (Trainer Program Detail)
+**Status:** ✅ **FUNCTIONAL** - correctly creates `ProgramAssignment`
 
-  // Check if current user is trainer/owner in the same org
-  const membership = await db.organizationMember.findFirst({
-    where: {
-      userId: currentUser.id,
-      role: { in: ["owner", "trainer"] },
-      organizationId: targetMembership.organizationId,
-    },
-  });
+#### Missing UI: No Way to Add Workouts to Program
+**File:** `app/trainer/programs/[id]/page.tsx`
 
-  if (!membership) {
-    return new NextResponse("Unauthorized: Not authorized", { status: 403 });
-  }
+**Problem:** The trainer program detail page shows existing workouts but has **no UI to add or remove workouts** from a program. The PATCH `/api/programs/[id]` accepts `workoutIds` but there's no interface to use it.
+
+#### Missing UI: No "Edit Workout" Button
+**Problem:** Individual workouts in the trainer program detail show no edit action. Workouts should be editable at `dashboard/workouts/[workoutId]/edit`.
+
+---
+
+### Files Requiring Changes (Issue 1)
+
+| File | Change |
+|------|--------|
+| `app/api/workout-sessions/route.ts` | Fix authorization to check program assignment, not just coachId |
+| `app/api/workout-sessions/[sessionId]/route.ts` | Fix GET authorization same issue |
+| `app/trainer/programs/[id]/page.tsx` | Add "Add Workouts" UI to program detail |
+
+---
+
+## Issue 2: Week/Periodization Functionality
+
+### Current Data Model (Insufficient)
+
+```
+Program ──────< Workout (flat list, no week grouping)
+    │
+    └───< ProgramAssignment (client link, only has startedAt)
+```
+
+### Problems with Current Model
+1. No concept of "current week" for an in-progress program
+2. No grouping of workouts into training weeks/phases
+3. No periodization (mesocycles, phases, deload weeks)
+4. `startedAt` on `ProgramAssignment` is unused for progression
+
+### Proposed Data Model
+
+```prisma
+// New model for week-based periodization
+model ProgramWeek {
+  id          String   @id @default(cuid())
+  programId   String   @map("program_id")
+  weekNumber  Int      @map("week_number")      // 1, 2, 3... or -1 for deload
+  name        String                           // "Week 1 - Hypertrophy", "Deload"
+  description String?
+  
+  // Periodization metadata
+  phase       String?                          // "hypertrophy", "strength", "deload"
+  targetSets  Int?     @map("target_sets")     // Optional weekly volume target
+  targetReps  Int?     @map("target_reps")      // Optional rep target
+  
+  // Order within program
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  workouts    Workout[]
+  
+  // Unique constraint: one week number per program
+  @@unique([programId, weekNumber])
+  @@map("program_weeks")
+}
+
+// Workout now references ProgramWeek (optional for flexibility)
+model Workout {
+  // ... existing fields ...
+  
+  // Replace direct programId with week-based relationship
+  programWeekId   String?  @map("program_week_id")
+  programWeek     ProgramWeek? @relation(fields: [programWeekId], references: [id], onDelete: SetNull)
+  
+  // Keep programId for queries, but workouts belong to a week within the program
+  // Actually, we should derive programId from programWeek.programId
+  // Let's keep it simpler - workout belongs to EITHER program directly OR to a programWeek
+}
+
+// ProgramAssignment tracks current week
+model ProgramAssignment {
+  id         String   @id @default(cuid())
+  programId  String   @map("program_id")
+  clientId   String   @map("client_id")
+  startedAt  DateTime @default(now()) @map("started_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // NEW: Track current week for periodization
+  currentWeekId    String?  @map("current_week_id")
+  currentWeek      ProgramWeek? @relation("CurrentWeek", fields: [currentWeekId], references: [id])
+  
+  // Relations
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  client  User    @relation("ClientPrograms", fields: [clientId], references: [id])
+  
+  // A client can only be assigned a program once (per program)
+  @@unique([programId, clientId])
+  @@map("program_assignments")
 }
 ```
 
-**Also update the workout query in the GET handler** to use the multi-tenant model instead of `userId`:
+### Simpler Alternative (If ProgramWeek Overkill)
 
-```typescript
-// After authorization passes, fetch workouts based on multi-tenant model
-// Get target user's org membership
-const targetMembership = await db.organizationMember.findFirst({
-  where: { userId: params.userId },
-  select: { organizationId: true },
-});
+If you don't need full periodization, a simpler approach:
 
-let workouts;
-if (targetMembership) {
-  // User is in an org — query via program assignments
-  const programAssignments = await db.programAssignment.findMany({
-    where: { clientId: params.userId },
-    select: { programId: true },
-  });
-
-  workouts = await db.workout.findMany({
-    where: {
-      programId: { in: programAssignments.map((pa) => pa.programId) },
-    },
-    include: {
-      exercises: {
-        include: { exercise: true },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-} else {
-  // Fallback to legacy userId query
-  workouts = await db.workout.findMany({
-    where: { userId: params.userId },
-    include: {
-      exercises: {
-        include: { exercise: true },
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+```prisma
+model Workout {
+  // ... existing fields ...
+  
+  // Simple week assignment
+  weekNumber   Int?     @map("week_number")    // 1, 2, 3... null = unassigned
+  dayOfWeek    Int?     @map("day_of_week")    // 0-6 for scheduling within week
 }
 ```
 
-**Apply the same fix to the POST handler's authorization block.**
+**Tradeoff:** Simpler schema but less flexibility for periodization metadata (phase names, deload indicators, volume targets).
 
 ---
 
-## Fix #4: `app/dashboard/workouts/page.tsx` — No Changes Needed
+### API Changes Needed
 
-The page already calls `getUserWorkouts(user.id)`. Once `getUserWorkouts()` is fixed in `lib/api/workouts.ts`, this page will automatically return correct results.
+#### New Endpoints
 
-If you want to add trainer/client tab differentiation later, you could import and use `getClientWorkouts()` vs `getTrainerWorkouts()` — but for the P0 fix, just fixing `getUserWorkouts()` is sufficient.
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/programs/[id]/weeks` | List all weeks in a program |
+| POST | `/api/programs/[id]/weeks` | Create a new week |
+| PATCH | `/api/programs/[id]/weeks/[weekId]` | Update week details |
+| DELETE | `/api/programs/[id]/weeks/[weekId]` | Delete a week |
+| GET | `/api/program-assignments/[assignmentId]/current-week` | Get client's current week info |
+| POST | `/api/program-assignments/[assignmentId]/advance-week` | Advance to next week |
 
----
+#### Modified Endpoints
 
-## File Changes Summary
-
-| File | Change Type | Description |
-|------|-------------|-------------|
-| `lib/api/workouts.ts` | **Replace** `getUserWorkouts()` | Multi-tenant-aware query via ProgramAssignment/Organization |
-| `lib/api/workouts.ts` | **Add** `getClientWorkouts()` | Explicit client-only workout query |
-| `lib/api/workouts.ts` | **Add** `getTrainerWorkouts()` | Explicit trainer/owner workout query |
-| `app/api/users/[userId]/workouts/route.ts` | **Fix** authorization | Correct org-based auth (not userId as orgId) |
-| `app/api/users/[userId]/workouts/route.ts` | **Fix** GET query | Use program assignment lookup instead of userId |
-| `app/api/users/[userId]/workouts/route.ts` | **Fix** POST authorization | Same org-based auth fix as GET |
-| `app/dashboard/workouts/page.tsx` | **No change** | Works automatically after lib/api/workouts.ts fix |
-
----
-
-## Role Determination Logic
-
-| User Role | Query Path | Prisma Query |
-|-----------|------------|--------------|
-| No `OrganizationMember` | Legacy fallback | `WHERE userId = userId` |
-| `client` only | `ProgramAssignment` → `Program` → `Workout` | `WHERE programId IN (SELECT programId FROM program_assignments WHERE clientId = userId)` |
-| `owner` or `trainer` | `Organization` → `Program` → `Workout` | `WHERE programId IN (SELECT id FROM programs WHERE organizationId IN (... user's orgs))` |
+| Endpoint | Change |
+|----------|--------|
+| `GET /api/workouts/program/[programId]` | Include week info in response |
+| `GET /api/program-assignments/client/[clientId]` | Include current week number (calculated from start date + elapsed weeks) |
+| `POST /api/workout-sessions` | Authorization: check if user is assigned to program OR owns workout |
 
 ---
 
-## Backward Compatibility
+### UI Changes Needed
 
-- **Legacy workouts** (those with `userId` set but `programId = null`) are preserved by the fallback query when no org membership exists.
-- **Existing `getStudentWorkouts()` and `getWorkout()` functions** are unchanged — they serve the coach-student relationship and should continue working.
-- The `userId` field on `Workout` model is kept (for potential future use); the fix uses `programId` as the primary join key.
+#### Trainer Views
+
+| File | Change |
+|------|--------|
+| `app/trainer/programs/[id]/page.tsx` | Show weeks accordion/section, add workouts to specific weeks |
+| `app/trainer/programs/[id]/weeks/[weekId]/page.tsx` | (New) Week detail/edit page |
+
+#### Client Views
+
+| File | Change |
+|------|--------|
+| `app/client/programs/[id]/page.tsx` | Show workouts grouped by week, highlight current week |
+| `app/client/programs/[id]/week/[weekId]/page.tsx` | (New) Week detail view for client |
 
 ---
 
-## Success Criteria
+## Implementation Approach
 
-- [ ] `getUserWorkouts()` returns workouts from assigned programs for clients
-- [ ] `getUserWorkouts()` returns workouts from org programs for trainers/owners
-- [ ] API route `/api/users/[userId]/workouts` returns correct workouts
-- [ ] Dashboard `/dashboard/workouts` page loads without errors
-- [ ] All 5 workouts + 42 exercises remain visible
-- [ ] Build passes without TypeScript errors
+### Phase 1: Fix Non-functional Buttons (Quick Win)
+1. Fix `app/api/workout-sessions/route.ts` authorization to check `ProgramAssignment` existence
+2. Fix `app/api/workout-sessions/[sessionId]/route.ts` authorization same fix
+3. Add "Add Workouts" dialog to trainer program detail page
+
+### Phase 2: Week/Periodization (Scaffold)
+1. Create migration for `ProgramWeek` model
+2. Add `weekNumber` to `Workout` (simpler approach)
+3. Add `currentWeekId` to `ProgramAssignment`
+4. Create week API routes
+5. Update trainer UI to manage weeks
+6. Update client UI to show week progress
+
+### Phase 3: Periodization Features (Polish)
+1. Add phase labels, deload indicators
+2. Auto-advance week based on completed workouts
+3. Week templates for program cloning
+
+---
+
+## File Change Summary
+
+### Issue 1 Files
+```
+app/api/workout-sessions/route.ts          # Fix authorization
+app/api/workout-sessions/[sessionId]/route.ts  # Fix authorization  
+app/trainer/programs/[id]/page.tsx         # Add workout management UI
+```
+
+### Issue 2 Files
+```
+prisma/schema.prisma                       # Add ProgramWeek model
+app/api/programs/[id]/weeks/route.ts       # New: weeks CRUD
+app/api/programs/[id]/weeks/[weekId]/route.ts  # New: single week operations
+app/api/program-assignments/route.ts       # Update to include current week
+lib/api/workouts.ts                        # Update queries for week filtering
+app/trainer/programs/[id]/page.tsx         # Week management UI
+app/client/programs/[id]/page.tsx          # Week-grouped workout display
+```
+
+---
+
+## Testing Checklist
+
+### Button Fixes
+- [ ] Client can start a workout from their program
+- [ ] Client can view workout session after starting
+- [ ] Trainer can add workouts to a program
+- [ ] Trainer can remove workouts from a program
+- [ ] Session completion syncs to sheets
+
+### Week/Periodization
+- [ ] Trainer can create weeks for a program
+- [ ] Trainer can assign workouts to specific weeks
+- [ ] Trainer can reorder weeks
+- [ ] Client sees workouts grouped by week
+- [ ] Client sees "current week" highlighted
+- [ ] Week progress persists across sessions

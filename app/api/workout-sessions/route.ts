@@ -18,19 +18,34 @@ export async function POST(req: Request) {
     const json = await req.json()
     const { workoutId } = createSessionSchema.parse(json)
 
-    // Verify the user has access to this workout (owns it or coach assigned it)
+    // Fetch the workout with its program assignments
     const workout = await db.workout.findFirst({
       where: {
         id: workoutId,
-        OR: [
-          { userId: user.id },
-          { user: { coachId: user.id } },
-        ],
+      },
+      include: {
+        program: {
+          include: {
+            assignments: {
+              where: { clientId: user.id },
+              select: { id: true },
+            },
+          },
+        },
       },
     })
 
     if (!workout) {
       return new Response("Not Found", { status: 404 })
+    }
+
+    // Check authorization: user owns the workout OR is assigned to the program
+    const isOwner = workout.userId === user.id
+    const isAssignedToProgram = workout.program?.assignments &&
+      workout.program.assignments.length > 0
+
+    if (!isOwner && !isAssignedToProgram) {
+      return new Response("Forbidden", { status: 403 })
     }
 
     // Resume existing in-progress session if one exists

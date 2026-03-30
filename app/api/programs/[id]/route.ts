@@ -12,7 +12,9 @@ const routeContextSchema = z.object({
 const updateProgramSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  workoutIds: z.array(z.string()).optional(),
+  // Atomic workout operations - add specific workouts (eliminates race condition)
+  addWorkoutIds: z.array(z.string()).optional(),
+  removeWorkoutIds: z.array(z.string()).optional(),
 })
 
 type RouteContext = z.infer<typeof routeContextSchema>
@@ -107,7 +109,7 @@ export async function PATCH(
       return new Response("Not Found", { status: 404 })
     }
 
-    // Check if user is an owner or the creator
+    // Check if user is an owner or trainer (trainers can modify workouts)
     const membership = await db.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -117,28 +119,26 @@ export async function PATCH(
       },
     })
 
-    if (!membership || membership.role !== "owner") {
+    if (!membership || (membership.role !== "owner" && membership.role !== "trainer")) {
       return new Response("Forbidden", { status: 403 })
     }
 
     const json = await req.json()
     const body = updateProgramSchema.parse(json)
 
-    // Update workout associations if provided
-    if (body.workoutIds !== undefined) {
-      // Disconnect all existing workouts
+    // Atomically add/remove workouts (no read-then-write race condition)
+    if (body.addWorkoutIds && body.addWorkoutIds.length > 0) {
       await db.workout.updateMany({
-        where: { programId: params.id },
+        where: { id: { in: body.addWorkoutIds } },
+        data: { programId: params.id },
+      })
+    }
+
+    if (body.removeWorkoutIds && body.removeWorkoutIds.length > 0) {
+      await db.workout.updateMany({
+        where: { id: { in: body.removeWorkoutIds }, programId: params.id },
         data: { programId: null },
       })
-
-      // Connect new workouts
-      if (body.workoutIds.length > 0) {
-        await db.workout.updateMany({
-          where: { id: { in: body.workoutIds } },
-          data: { programId: params.id },
-        })
-      }
     }
 
     const updated = await db.program.update({
