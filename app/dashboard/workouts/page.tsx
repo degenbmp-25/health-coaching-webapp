@@ -10,7 +10,6 @@ import { WorkoutList } from "@/components/workout/workout-list"
 import { WorkoutListSkeleton } from "@/components/workout/workout-list-skeleton"
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
-import { SheetsWorkoutView } from "@/components/workout/sheets-workout-view"
 
 export const metadata: Metadata = {
   title: "Workouts",
@@ -24,22 +23,11 @@ export default async function WorkoutsPage() {
     redirect("/signin")
   }
 
-  const isSheetsMode = !!process.env.NEXT_PUBLIC_SHEET_CSV_URL
+  // Always use DB-backed workout management - sheets mode removed
+  // (keeping code for future reference)
+  const isSheetsMode = false
 
-  // Primary mode: Live sheets workout experience
-  if (isSheetsMode) {
-    return (
-      <Shell>
-        <DashboardHeader
-          heading="Today's Workout"
-          text="Live workout from Google Sheets"
-        />
-        <SheetsWorkoutView />
-      </Shell>
-    )
-  }
-
-  // Fallback: DB-backed workout management
+  // DB-backed workout management
   const workouts = await getUserWorkouts(user.id)
 
   return (
