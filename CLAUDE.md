@@ -130,6 +130,16 @@ Critical variables that must be set:
 - `RESEND_API_KEY` - Email service
 - `NEXT_PUBLIC_APP_URL` - Application URL
 
+### Design Principles (CRITICAL)
+
+**MOBILE-FIRST: This is a mobile-primary application.**
+- All UI/UX must be designed for mobile first, desktop is secondary
+- Test all changes on mobile viewport before committing
+- Use responsive classes (`md:`, `lg:`) to enhance mobile-first designs
+- Mobile navigation must have feature parity with desktop
+- Touch targets must be minimum 44x44px
+- Content must be readable and accessible on small screens
+
 ### Common Development Tasks
 
 1. **Adding a new feature**: Create components in `/components/[feature]/`, add API routes if needed, update Prisma schema if database changes required
