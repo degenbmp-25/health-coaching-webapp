@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Shell } from "@/components/layout/shell"
@@ -35,8 +35,8 @@ interface ClientData {
   }>
 }
 
-export default function TrainerClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function TrainerClientDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const [user, setUser] = useState<any>(null)
   const [client, setClient] = useState<ClientData | null>(null)
   const [loading, setLoading] = useState(true)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Shell } from "@/components/layout/shell"
@@ -31,8 +31,8 @@ interface GroupedWorkouts {
   [week: number]: Workout[]
 }
 
-export default function ClientProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function ClientProgramDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const [user, setUser] = useState<any>(null)
   const [program, setProgram] = useState<{ program: { id: string; name: string; description: string | null }; workouts: Workout[]; groupedByWeek: GroupedWorkouts | null } | null>(null)
   const [loading, setLoading] = useState(true)
