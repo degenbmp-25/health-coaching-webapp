@@ -3,8 +3,6 @@ import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/session"
 import { db } from "@/lib/db"
 
-import { getWorkout } from "@/lib/api/workouts"
-
 import { WorkoutSessionView } from "@/components/workout/workout-session-view"
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
@@ -40,7 +38,17 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     workoutId = session.workoutId
   }
 
-  const workout = await getWorkout(workoutId, user.id)
+  // Don't use getWorkout() - it checks userId ownership which fails for clients accessing trainer's workouts
+  // We already verified access via the session lookup above
+  const workout = await db.workout.findFirst({
+    where: { id: workoutId },
+    include: {
+      exercises: {
+        include: { exercise: true },
+        orderBy: { order: "asc" },
+      },
+    },
+  })
   if (!workout) {
     notFound()
   }
