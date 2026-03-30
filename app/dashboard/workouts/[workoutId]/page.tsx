@@ -28,61 +28,21 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     redirect("/signin")
   }
 
-  // First, try to get the session - the URL param is actually a SESSION ID when coming from Start Workout
+  let workoutId = params.workoutId
+
+  // Check if this is actually a session ID
   const session = await db.workoutSession.findFirst({
-    where: {
-      id: params.workoutId,
-      userId: user.id,
-    },
-    include: {
-      workout: {
-        include: {
-          exercises: {
-            include: {
-              exercise: true,
-            },
-            orderBy: {
-              order: "asc",
-            },
-          },
-        },
-      },
-    },
+    where: { id: params.workoutId, userId: user.id },
+    select: { workoutId: true },
   })
 
-  // If we found a session, use the workout from it
-  const workout = session?.workout
+  if (session) {
+    workoutId = session.workoutId
+  }
 
+  const workout = await getWorkout(workoutId, user.id)
   if (!workout) {
-    // Fallback: maybe it's an old-style workout ID, try direct fetch
-    const directWorkout = await getWorkout(params.workoutId, user.id)
-    if (!directWorkout) {
-      notFound()
-    }
-    return (
-      <Shell>
-        <DashboardHeader
-          heading={directWorkout.name}
-          text="Track your workout progress."
-        >
-          <div className="flex gap-2">
-            <Link href={`/dashboard/workouts/${directWorkout.id}/edit`}>
-              <Button variant="outline" size="sm">
-                <Icons.edit className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            </Link>
-            <Link href="/dashboard/workouts">
-              <Button variant="outline" size="sm">
-                <Icons.back className="mr-2 h-4 w-4" />
-                All Workouts
-              </Button>
-            </Link>
-          </div>
-        </DashboardHeader>
-        <WorkoutSessionView workout={directWorkout} />
-      </Shell>
-    )
+    notFound()
   }
 
   return (
