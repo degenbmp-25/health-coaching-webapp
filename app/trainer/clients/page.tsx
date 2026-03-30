@@ -123,8 +123,8 @@ export default function TrainerClientsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{client.organizationName}</Badge>
-                    <Button variant="ghost" size="sm">
+                    <span className="text-sm text-muted-foreground">{client.organizationName}</span>
+                    <Button variant="ghost" size="sm" onClick={() => router.push(`/trainer/clients/${client.id}`)}>
                       View →
                     </Button>
                   </div>

@@ -18,11 +18,17 @@ export default async function DashboardLayout({
   // Check if user can access trainer section (owner or trainer role)
   let canAccessTrainer = false
   if (user) {
-    const membership = await db.organizationMember.findFirst({
-      where: { userId: user.id },
-      select: { role: true },
-    })
-    canAccessTrainer = membership?.role === "owner" || membership?.role === "trainer"
+    try {
+      const membership = await db.organizationMember.findFirst({
+        where: { userId: user.id },
+        select: { role: true },
+      })
+      canAccessTrainer = membership?.role === "owner" || membership?.role === "trainer"
+    } catch (error) {
+      console.error("Error checking trainer access:", error)
+      // Default to showing trainer nav for authenticated users if check fails
+      canAccessTrainer = true
+    }
   }
 
   // Combine links for mobile nav
