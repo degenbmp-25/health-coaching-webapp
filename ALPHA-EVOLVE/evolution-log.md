@@ -265,3 +265,51 @@
 - [x] Trainers can now remove workouts from programs (authorization fixed)
 - [x] Concurrent workout additions no longer cause data loss (atomic operations)
 - [x] Build passes without TypeScript errors
+
+---
+
+## Bug Fixes (Loop 5) - 2026-03-31 - MuxPlayer Error Handling & Metadata
+
+### HIGH Issues Fixed (2)
+
+#### HIGH #1: MuxPlayer Missing onError Handler
+**Status:** Fixed
+- **Problem:** MuxPlayer component had no error handling - if video failed to load, user saw broken/invisible player with no feedback
+- **Fix:** Added `hasError` state and `onError` callback to MuxPlayer
+- **File:** `components/workout/mux-player.tsx`
+- **Changes:**
+  - Added `useState` import and `hasError` state
+  - Added `onError={() => setHasError(true)}` callback to MuxPlayer
+  - Shows fallback UI (styled message with clock icon) when error occurs
+
+#### HIGH #2: Hardcoded viewer_user_id in Metadata
+**Status:** Fixed
+- **Problem:** Metadata had `viewer_user_id: 'workout-app'` hardcoded - this is a privacy concern and not configurable
+- **Fix:** Removed `viewer_user_id` from metadata entirely - Mux Analytics works fine without it
+- **File:** `components/workout/mux-player.tsx`
+- **Changes:**
+  - Removed `viewer_user_id: 'workout-app'` from metadata object
+
+---
+
+## Build Status
+
+✓ Build completed successfully with no TypeScript errors
+- All 42+ pages/routes generated
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `components/workout/mux-player.tsx` | Added onError handler + error state, removed hardcoded viewer_user_id |
+
+---
+
+## Success Criteria Met
+
+- [x] MuxPlayer shows user-friendly error message when video fails to load
+- [x] Error state properly resets (component remounts on playbackId change)
+- [x] No hardcoded user identifiers in video metadata
+- [x] Build passes without TypeScript errors
