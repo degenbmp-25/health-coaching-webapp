@@ -1,5 +1,6 @@
 'use client';
 
+import MuxPlayer from '@mux/mux-player-react';
 import { Icons } from '@/components/icons';
 
 interface MuxPlayerProps {
@@ -21,23 +22,20 @@ export function VideoPlayer({ playbackId, title, className }: MuxPlayerProps) {
     );
   }
 
-  const embedUrl = `https://stream.mux.com/${playbackId}?autoplay=0&muted=0`;
-
   return (
     <div className="rounded-md overflow-hidden border relative" style={{ aspectRatio: '16/9' }}>
-      <iframe
-        src={embedUrl}
-        title={title || 'Workout Video'}
-        allowFullScreen
-        allow="autoplay; fullscreen"
-        style={{
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          border: 'none',
+      <MuxPlayer
+        playbackId={playbackId}
+        metadata={{
+          video_title: title || 'Workout Video',
+          viewer_user_id: 'workout-app',
         }}
+        streamType="on-demand"
+        accentColor="#f97316"
+        primaryColor="#ffffff"
+        secondaryColor="#1e293b"
+        style={{ width: '100%', height: '100%', borderRadius: '6px' }}
+        className={className}
       />
     </div>
   );
