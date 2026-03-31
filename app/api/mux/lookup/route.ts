@@ -23,10 +23,17 @@ export async function GET(request: NextRequest) {
     });
     
     // If no exact match, try partial match (DB might store shortened version)
+    // sheets videoUrl = "SMR trap/shoulder.MOV", DB videoUrl = "shoulder.MOV"
+    // We want to match where the DB videoUrl is contained in or matches the end of sheets URL
     if (exercises.length === 0) {
+      // Get the filename from the sheets URL (after last /)
+      const filename = videoUrl.split('/').pop() || videoUrl;
       exercises = await prisma.workoutExercise.findMany({
         where: { 
-          videoUrl: { endsWith: videoUrl }
+          OR: [
+            { videoUrl: { endsWith: filename } }, // DB ends with "shoulder.MOV"
+            { videoUrl: videoUrl }, // Already tried exact match above
+          ]
         },
         select: { muxPlaybackId: true, muxAssetId: true }
       });

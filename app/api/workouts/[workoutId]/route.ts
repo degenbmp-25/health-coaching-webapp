@@ -139,12 +139,23 @@ export async function DELETE(
       return new Response("Not Found", { status: 404 })
     }
 
-    // Check authorization: user owns workout OR is assigned to the program
+    // Check authorization: user owns workout OR is a trainer/owner in the org
     const isOwner = workout.userId === user.id
-    const isAssignedToProgram = workout.program?.assignments &&
-      workout.program.assignments.length > 0
 
-    if (!isOwner && !isAssignedToProgram) {
+    // Check if user is a TRAINER or OWNER in the organization (not just a client)
+    let isTrainerOrOwner = false
+    if (workout.program?.organizationId) {
+      const membership = await db.organizationMember.findFirst({
+        where: {
+          userId: user.id,
+          organizationId: workout.program.organizationId,
+          role: { in: ["OWNER", "TRAINER"] },
+        },
+      })
+      isTrainerOrOwner = !!membership
+    }
+
+    if (!isOwner && !isTrainerOrOwner) {
       return new Response("Forbidden", { status: 403 })
     }
 
