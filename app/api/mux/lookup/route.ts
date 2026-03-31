@@ -22,17 +22,30 @@ export async function GET(request: NextRequest) {
       select: { muxPlaybackId: true, muxAssetId: true }
     });
     
-    // If no exact match, try partial match (DB might store shortened version)
-    // sheets videoUrl = "SMR trap/shoulder.MOV", DB videoUrl = "shoulder.MOV"
-    // We want to match where the DB videoUrl is contained in or matches the end of sheets URL
+    // If no exact match, try fuzzy matching
+    // sheets data: "book opener.MOV", DB: "opener.MOV"
+    // sheets data: "SMR trap/shoulder.MOV", DB: "shoulder.MOV"
     if (exercises.length === 0) {
-      // Get the filename from the sheets URL (after last /)
+      // Get the pure filename (after last /) and name without extension
       const filename = videoUrl.split('/').pop() || videoUrl;
+      const nameWithoutExt = filename.replace(/\.[^.]+$/, '').toLowerCase();
+      
+      // Find DB entries where:
+      // 1. DB filename ends with sheets filename (handles "SMR trap/shoulder.MOV" → "shoulder.MOV")
+      // 2. DB name without extension is contained in sheets name (handles "book opener.MOV" → "opener")
       exercises = await prisma.workoutExercise.findMany({
         where: { 
+          muxPlaybackId: { not: null },
           OR: [
-            { videoUrl: { endsWith: filename } }, // DB ends with "shoulder.MOV"
-            { videoUrl: videoUrl }, // Already tried exact match above
+            // DB ends with sheets filename: "shoulder.MOV".endsWith("shoulder.MOV") = true
+            { videoUrl: { endsWith: filename } },
+            // DB name contained in sheets name: "opener".includes("opener") = true  
+            // For "book opener.MOV" vs "opener.MOV", we check if "book opener".includes("opener")
+            { 
+              videoUrl: {
+                contains: nameWithoutExt
+              }
+            },
           ]
         },
         select: { muxPlaybackId: true, muxAssetId: true }
