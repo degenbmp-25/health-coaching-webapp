@@ -72,7 +72,7 @@ export function VideoPlayer({ playbackId, title, className }: MuxPlayerProps) {
         className={className}
         primaryColor="#f97316"
         secondaryColor="#1e293b"
-        onError={() => setHasError(true)}
+        onError={() => { setHasError(true); setIsLoading(false); setUseFallback(true); }}
         onLoadedData={() => setIsLoading(false)}
         onCanPlay={() => setIsLoading(false)}
       />
