@@ -342,14 +342,8 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                     })}
                   </div>
 
-                  {/* Video Section - use muxPlaybackId if available */}
-                  {we.muxPlaybackId ? (
-                    <div className="mb-4">
-                      <VideoPlayer playbackId={we.muxPlaybackId} title={we.exercise.name} />
-                    </div>
-                  ) : we.notes ? (
-                    <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>
-                  ) : null}
+                  {/* Notes - fallback when no video */}
+                  {we.notes && <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>}
 
                   <Button
                     type="button"
