@@ -14,27 +14,18 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
   const [isLoading, setIsLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Guard against empty string playbackId
-  if (!playbackId || playbackId.trim() === '') {
-    return (
-      <div className="rounded-md border bg-muted/50 p-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Icons.clock className="h-4 w-4" />
-          <span>No video available</span>
-        </div>
-      </div>
-    );
-  }
-
-  const streamUrl = `https://stream.mux.com/${playbackId}.m3u8`;
+  // Stream URL
+  const streamUrl = playbackId && playbackId.trim() !== ''
+    ? `https://stream.mux.com/${playbackId}.m3u8`
+    : null;
 
   useEffect(() => {
+    if (!streamUrl || !videoRef.current) return;
+
     let hlsInstance: any = null;
+    const video = videoRef.current;
 
     const initVideo = async () => {
-      const video = videoRef.current;
-      if (!video) return;
-
       setIsLoading(true);
       setHasError(false);
 
@@ -82,7 +73,19 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
         hlsInstance.destroy();
       }
     };
-  }, [playbackId, streamUrl]);
+  }, [streamUrl]);
+
+  // Guard against empty playbackId
+  if (!playbackId || playbackId.trim() === '') {
+    return (
+      <div className="rounded-md border bg-muted/50 p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Icons.clock className="h-4 w-4" />
+          <span>No video available</span>
+        </div>
+      </div>
+    );
+  }
 
   if (hasError) {
     return (
@@ -109,7 +112,6 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
         playsInline
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         className={className}
-        poster={undefined}
       />
     </div>
   );
