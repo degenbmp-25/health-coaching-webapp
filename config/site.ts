@@ -19,11 +19,11 @@ export const siteConfig: SiteConfig = {
     "Monitor",
   ],
   url: {
-    base: env.NEXT_PUBLIC_APP_URL,
+    base: env.NEXT_PUBLIC_APP_URL || "https://habithletics.vercel.app",
     author: "https://redpangilinan.live",
   },
   links: {
     github: "https://github.com/redpangilinan/Habithletics",
   },
-  ogImage: `${env.NEXT_PUBLIC_APP_URL}/og.jpg`,
+  ogImage: `${env.NEXT_PUBLIC_APP_URL || "https://habithletics.vercel.app"}/og.jpg`,
 }
