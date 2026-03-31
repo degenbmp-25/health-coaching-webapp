@@ -50,21 +50,28 @@ export function SheetsWorkoutView() {
       })
       setLogs(logsMap)
 
-      // Fetch mux playback IDs for videos
+      // Fetch mux playback IDs for videos - sequential with proper error handling
       const muxMap = new Map<string, string>()
       const allVideoUrls = data.flatMap(w => w.exercises.map(e => e.videoUrl))
       const uniqueVideoUrls = Array.from(new Set(allVideoUrls.filter((url): url is string => Boolean(url))))
-      await Promise.all(uniqueVideoUrls.map(async (videoUrl) => {
+
+      // Sequential await instead of Promise.all for better error handling
+      for (const videoUrl of uniqueVideoUrls) {
         try {
           const res = await fetch(`/api/mux/lookup?videoUrl=${encodeURIComponent(videoUrl)}`)
+          if (!res.ok) {
+            console.warn(`Mux lookup failed for ${videoUrl}: HTTP ${res.status}`)
+            continue
+          }
           const json = await res.json()
           if (json.muxPlaybackId) {
             muxMap.set(videoUrl, json.muxPlaybackId)
           }
         } catch (e) {
-          // Ignore lookup errors
+          console.warn(`Mux lookup failed for ${videoUrl}:`, e)
+          // Continue with other lookups instead of failing entirely
         }
-      }))
+      }
       setMuxPlaybackIds(muxMap)
     } catch (e) {
       setError({
@@ -297,27 +304,51 @@ export function SheetsWorkoutView() {
                             <Icons.play className="h-4 w-4 text-primary" />
                             <span className="text-sm font-medium">Demo Video</span>
                           </div>
-                          {muxPlaybackIds.get(exercise.videoUrl) ? (
-                            <VideoPlayer 
-                              playbackId={muxPlaybackIds.get(exercise.videoUrl)!} 
-                              title={exercise.name}
-                            />
-                          ) : exercise.videoUrl.startsWith('http') ? (
-                            <a
-                              href={exercise.videoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline truncate"
-                            >
-                              <Icons.externalLink className="h-4 w-4 shrink-0" />
-                              <span className="truncate">{exercise.videoUrl}</span>
-                            </a>
-                          ) : (
-                            <div className="flex items-center gap-2 text-sm text-amber-500">
-                              <Icons.externalLink className="h-4 w-4 shrink-0" />
-                              <span className="truncate">Video needs migration: {exercise.videoUrl}</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const muxId = muxPlaybackIds.get(exercise.videoUrl);
+                            if (muxId) {
+                              return <VideoPlayer playbackId={muxId} title={exercise.name} />;
+                            }
+                            if (exercise.videoUrl.startsWith('http')) {
+                              return (
+                                <a
+                                  href={exercise.videoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline truncate"
+                                >
+                                  <Icons.externalLink className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">{exercise.videoUrl}</span>
+                                </a>
+                              );
+                            }
+                            // Fallback: render as HTML5 video with direct file URL (for local files like "book opener.MOV")
+                            // These are videos stored in the public/media folder
+                            return (
+                              <div className="relative">
+                                <video
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="w-full rounded-md"
+                                  src={`/media/videos/${exercise.videoUrl}`}
+                                  onError={(e) => {
+                                    // If video fails to load, show error message
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const errorDiv = target.nextSibling as HTMLElement;
+                                    if (errorDiv) errorDiv.style.display = 'flex';
+                                  }}
+                                >
+                                  Your browser does not support video playback.
+                                </video>
+                                <div className="hidden items-center gap-2 text-sm text-amber-500">
+                                  <Icons.externalLink className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">Video needs migration: {exercise.videoUrl}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
