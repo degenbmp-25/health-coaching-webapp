@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Icons } from "@/components/icons"
 import { toast } from "@/components/ui/use-toast"
+import { VideoPlayer } from "@/components/workout/mux-player"
 
 interface WorkoutExerciseWithExercise extends WorkoutExercise {
   exercise: Exercise
@@ -341,7 +342,14 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                     })}
                   </div>
 
-                  {we.notes && <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>}
+                  {/* Video Section - use muxPlaybackId if available */}
+                  {we.muxPlaybackId ? (
+                    <div className="mb-4">
+                      <VideoPlayer playbackId={we.muxPlaybackId} title={we.exercise.name} />
+                    </div>
+                  ) : we.notes ? (
+                    <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>
+                  ) : null}
 
                   <Button
                     type="button"
