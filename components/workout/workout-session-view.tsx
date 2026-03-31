@@ -351,8 +351,14 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                     })}
                   </div>
 
-                  {/* Notes - show as text for now */}
-                  {we.notes && <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>}
+                  {/* Video Section */}
+                  {we.muxPlaybackId ? (
+                    <div className="mb-4">
+                      <VideoPlayer playbackId={we.muxPlaybackId} title={we.exercise?.name} />
+                    </div>
+                  ) : we.notes ? (
+                    <p className="text-sm italic text-muted-foreground mb-4">{we.notes}</p>
+                  ) : null}
 
                   <Button
                     type="button"
