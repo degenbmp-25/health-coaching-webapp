@@ -291,8 +291,27 @@ model Organization {
   members          OrganizationMember[]
   programs         Program[]
   sheetConnections SheetConnection[]
+  videos          OrganizationVideo[]
 
   @@map("organizations")
+}
+
+// OrganizationVideo - videos owned by an organization (stored in Mux)
+model OrganizationVideo {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  muxAssetId     String   @map("mux_asset_id")
+  muxPlaybackId  String?  @map("mux_playback_id")
+  title          String
+  thumbnailUrl   String?  @map("thumbnail_url")
+  duration       Int?     // seconds
+  status        String   @default("pending") // "pending" | "ready" | "errored"
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_videos")
 }
 
 // OrganizationMember - junction table for users ↔ organizations with roles
