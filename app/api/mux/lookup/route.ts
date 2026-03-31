@@ -23,33 +23,31 @@ export async function GET(request: NextRequest) {
     });
     
     // If no exact match, try fuzzy matching
-    // sheets data: "book opener.MOV", DB: "opener.MOV"
-    // sheets data: "SMR trap/shoulder.MOV", DB: "shoulder.MOV"
+    // sheets data: "book opener.MOV", DB: "opener.MOV" - we need to match "opener" to "book opener"
+    // sheets data: "SMR trap/shoulder.MOV", DB: "shoulder.MOV" - we need to match "shoulder" to "shoulder"
     if (exercises.length === 0) {
       // Get the pure filename (after last /) and name without extension
       const filename = videoUrl.split('/').pop() || videoUrl;
-      const nameWithoutExt = filename.replace(/\.[^.]+$/, '').toLowerCase();
+      const sheetsCoreName = filename.replace(/\.[^.]+$/, '').toLowerCase();
       
-      // Find DB entries where:
-      // 1. DB filename ends with sheets filename (handles "SMR trap/shoulder.MOV" → "shoulder.MOV")
-      // 2. DB name without extension is contained in sheets name (handles "book opener.MOV" → "opener")
-      exercises = await prisma.workoutExercise.findMany({
-        where: { 
-          muxPlaybackId: { not: null },
-          OR: [
-            // DB ends with sheets filename: "shoulder.MOV".endsWith("shoulder.MOV") = true
-            { videoUrl: { endsWith: filename } },
-            // DB name contained in sheets name: "opener".includes("opener") = true  
-            // For "book opener.MOV" vs "opener.MOV", we check if "book opener".includes("opener")
-            { 
-              videoUrl: {
-                contains: nameWithoutExt
-              }
-            },
-          ]
-        },
-        select: { muxPlaybackId: true, muxAssetId: true }
+      // Fetch all exercises with muxPlaybackId and do fuzzy matching in JS
+      const allWithMux = await prisma.workoutExercise.findMany({
+        where: { muxPlaybackId: { not: null } },
+        select: { videoUrl: true, muxPlaybackId: true }
       });
+      
+      // Find best match by comparing core names
+      for (const ex of allWithMux) {
+        if (!ex.videoUrl) continue;
+        const dbCoreName = ex.videoUrl.replace(/\.[^.]+$/, '').toLowerCase();
+        // Check if either core name contains the other
+        // "book opener" vs "opener": "book opener".includes("opener") = true
+        // "shoulder" vs "shoulder": both ways work
+        if (sheetsCoreName.includes(dbCoreName) || dbCoreName.includes(sheetsCoreName)) {
+          exercises = [{ muxPlaybackId: ex.muxPlaybackId, muxAssetId: null }];
+          break;
+        }
+      }
     }
 
     // Return unique playback IDs
