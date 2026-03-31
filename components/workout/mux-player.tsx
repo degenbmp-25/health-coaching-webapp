@@ -41,9 +41,7 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
       try {
         const Hls = (await import('hls.js')).default;
         if (Hls.isSupported()) {
-          hlsInstance = new Hls({
-            qualityWarningMiddleware: false,
-          });
+          hlsInstance = new Hls({});
           hlsInstance.loadSource(streamUrl);
           hlsInstance.attachMedia(video);
           hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
