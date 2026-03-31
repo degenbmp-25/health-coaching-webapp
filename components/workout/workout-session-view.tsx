@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Workout, Exercise, WorkoutExercise } from "@prisma/client"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,15 @@ import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Icons } from "@/components/icons"
 import { toast } from "@/components/ui/use-toast"
-import { VideoPlayer } from "@/components/workout/mux-player"
+
+// Dynamic import for VideoPlayer to avoid SSR issues with MuxPlayer
+const VideoPlayer = dynamic(
+  () => import("./mux-player").then((mod) => mod.VideoPlayer),
+  {
+    ssr: false,
+    loading: () => <div className="rounded-md border bg-muted/50 p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Icons.spinner className="h-4 w-4 animate-spin" /><span>Loading video...</span></div></div>,
+  }
+)
 
 interface WorkoutExerciseWithExercise extends WorkoutExercise {
   exercise: Exercise
