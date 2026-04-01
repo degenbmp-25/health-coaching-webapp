@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useUser } from "@clerk/nextjs"
 import { UserCoach } from "@/components/coach/UserCoach"
 import { CoachStudents } from "@/components/coach/CoachStudents"
+import { ClientSelector } from "@/components/coach/ClientSelector"
 import { CoachSelector } from "@/components/coach/CoachSelector"
 import { StudentDataDashboard } from "@/components/coach/StudentDataDashboard"
 import { Button } from "@/components/ui/button"
@@ -186,6 +187,12 @@ export default function CoachingPage() {
             </Card>
           ) : (
             <div className="space-y-6">
+              {/* Add Client Selector */}
+              <ClientSelector 
+                coachId={userId} 
+                onClientAdded={fetchStudents}
+              />
+              
               {/* Student Data Dashboard */}
               <StudentDataDashboard 
                 coach={user}
