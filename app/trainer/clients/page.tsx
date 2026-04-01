@@ -49,7 +49,7 @@ export default function TrainerClientsPage() {
         const allClients: Client[] = []
         
         for (const org of orgs) {
-          if (["owner", "trainer"].includes(org.userRole)) {
+          if (["owner", "trainer", "coach"].includes(org.userRole)) {
             const detailRes = await fetch(`/api/organizations/${org.id}`)
             if (detailRes.ok) {
               const detail = await detailRes.json()

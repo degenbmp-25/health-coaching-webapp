@@ -25,13 +25,14 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
   }
 
   // Get fresh user data from database to ensure we have the latest role
-  const dbUser = await db.user.findUnique({
-    where: { id: user.id },
-    select: { role: true }
+  const dbUser = await db.user.findFirst({
+    where: { clerkId: user.id },
+    select: { id: true, role: true }
   })
-
-  // Verify user is a coach using fresh database data
-  if (dbUser?.role !== "coach") {
+  const coachMembership = dbUser ? await db.organizationMember.findFirst({
+    where: { userId: dbUser.id, role: "coach" }
+  }) : null
+  if (!coachMembership && dbUser?.role !== "coach") {
     redirect("/dashboard")
   }
 

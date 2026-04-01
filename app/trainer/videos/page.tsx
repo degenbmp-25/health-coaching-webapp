@@ -17,7 +17,7 @@ export default async function TrainerVideosPage() {
   const membership = await db.organizationMember.findFirst({
     where: {
       userId: user.id,
-      role: { in: ['owner', 'trainer'] }
+      role: { in: ['owner', 'trainer', 'coach'] }
     },
     include: {
       organization: true
