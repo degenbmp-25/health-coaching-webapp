@@ -389,7 +389,7 @@ export function WorkoutEditForm({
                           <FormLabel>Video</FormLabel>
                           <Select
                             onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                            defaultValue={field.value || "none"}
+                            value={field.value ?? "none"}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -401,7 +401,7 @@ export function WorkoutEditForm({
                               {readyVideos.map((video) => (
                                 <SelectItem 
                                   key={video.id} 
-                                  value={video.muxPlaybackId || video.id}
+                                  value={video.muxPlaybackId ?? video.id}
                                 >
                                   {video.title}
                                 </SelectItem>
