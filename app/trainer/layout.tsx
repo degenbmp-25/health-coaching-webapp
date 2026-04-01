@@ -21,14 +21,19 @@ export default async function TrainerLayout({ children }: TrainerLayoutProps) {
       const membership = await db.organizationMember.findFirst({
         where: {
           userId: user.id,
-          role: { in: ["owner", "trainer"] },
+          role: { in: ["owner", "trainer", "coach"] },
         },
         select: { role: true },
       })
-      canAccessTrainer = Boolean(membership)
+      // Also check User.role for coach access
+      const dbUser = await db.user.findUnique({
+        where: { id: user.id },
+        select: { role: true }
+      })
+      canAccessTrainer = Boolean(membership) || dbUser?.role === 'coach'
     } catch (error) {
       console.error("Error checking trainer access:", error)
-      canAccessTrainer = true
+      canAccessTrainer = false
     }
   }
 

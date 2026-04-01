@@ -88,20 +88,22 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
   const membership = await db.organizationMember.findFirst({
     where: {
       userId: user.id,
-      role: { in: ['owner', 'trainer'] }
+      role: { in: ['owner', 'trainer', 'coach'] }
     },
     include: { organization: true }
   })
 
-  if (membership) {
+  if (membership || dbUser?.role === 'coach') {
     isTrainer = true
-    organizationVideos = await db.organizationVideo.findMany({
-      where: {
-        organizationId: membership.organizationId,
-        status: 'ready'
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    organizationVideos = membership
+      ? await db.organizationVideo.findMany({
+          where: {
+            organizationId: membership.organizationId,
+            status: 'ready'
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : []
   }
 
   // Transform workout data for the form (include muxPlaybackId)

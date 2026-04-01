@@ -103,8 +103,8 @@ export function WorkoutEditForm({
   const router = useRouter()
   const [isSaving, setIsSaving] = React.useState<boolean>(false)
 
-  // Filter to only ready videos
-  const readyVideos = videos.filter(v => v.status === 'ready')
+  // Filter to only ready videos with valid muxPlaybackId
+  const readyVideos = videos.filter(v => v.status === 'ready' && v.muxPlaybackId != null)
 
   const form = useForm<FormData>({
     resolver: zodResolver(workoutFormSchema),

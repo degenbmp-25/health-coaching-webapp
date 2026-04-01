@@ -42,23 +42,31 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
   let organizationVideos: any[] = []
   let isTrainer = false
 
+  // Also check User.role === 'coach' since coaches manage workouts
+  const dbUser = await db.user.findUnique({
+    where: { id: user.id },
+    select: { role: true }
+  })
+
   const membership = await db.organizationMember.findFirst({
     where: {
       userId: user.id,
-      role: { in: ['owner', 'trainer'] }
+      role: { in: ['owner', 'trainer', 'coach'] }
     },
     include: { organization: true }
   })
 
-  if (membership) {
+  if (membership || dbUser?.role === 'coach') {
     isTrainer = true
-    organizationVideos = await db.organizationVideo.findMany({
-      where: {
-        organizationId: membership.organizationId,
-        status: 'ready'
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    organizationVideos = membership
+      ? await db.organizationVideo.findMany({
+          where: {
+            organizationId: membership.organizationId,
+            status: 'ready'
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : []
   }
 
   // Transform workout data for the form (include muxPlaybackId)

@@ -489,3 +489,118 @@
 - [x] ClientSelector receives database ID (via currentUserDbId)
 - [x] StudentDataDashboard receives database ID (via currentUserDbId)
 - [x] Build passes without TypeScript errors
+---
+
+## Video Selector Loop - 2026-04-01
+
+### Summary
+Built video selector dropdown for trainers/owners to assign Mux videos to exercises when building programs.
+
+### Phases Completed
+1. **Requirements** - `requirements-video-selector.md` created
+2. **SPEC** - `SPEC-video-selector.md` created with detailed implementation plan
+3. **Builder** - Implemented changes to:
+   - `app/api/workouts/[workoutId]/route.ts` - Added muxPlaybackId to schema
+   - `components/workout/workout-edit-form.tsx` - Added video selector dropdown
+   - Edit pages - Added video fetching and passing to form
+4. **Reviewer** - Quality Score: 8/10 ✅
+5. **Tester** - "READY FOR DEPLOYMENT" ✅ (code correct, test account DB setup issue)
+
+### Files Modified
+- `app/api/workouts/[workoutId]/route.ts` - Added muxPlaybackId to exercise schema
+- `components/workout/workout-edit-form.tsx` - Added video selector for trainers
+- `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
+- `app/dashboard/workouts/[workoutId]/edit/page.tsx`
+
+### Deployment
+- Branch: `feature/video-selector-for-exercises`
+- Deployed to: https://habithletics-redesign-evolve-coral.vercel.app
+
+### Status: ✅ COMPLETE
+
+---
+
+## Video Selector Bug Fixes - 2026-04-01
+
+### Summary
+Fixed two bugs related to the video selector:
+1. Coach users couldn't see the video selector dropdown
+2. Videos with null muxPlaybackId caused wrong videos to play
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `app/dashboard/workouts/[workoutId]/edit/page.tsx` | Added User.role === 'coach' check + coach in OrganizationMember.role |
+| `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx` | Same coach role expansion |
+| `app/trainer/layout.tsx` | Added 'coach' to nav visibility role check |
+| `app/dashboard/layout.tsx` | Added 'coach' to nav visibility role check |
+| `components/workout/workout-edit-form.tsx` | Filter out videos where muxPlaybackId is null |
+
+### Changes Detail
+
+1. **Coach Role Fix (4 files):**
+   - Expanded `OrganizationMember.role` check from `['owner', 'trainer']` to `['owner', 'trainer', 'coach']`
+   - Added `db.user.findUnique` to check `User.role === 'coach'`
+   - Coach users now get `isTrainer = true` and can see the video selector
+
+2. **Video Filter Fix (1 file):**
+   - Changed `videos.filter(v => v.status === 'ready')` to `videos.filter(v => v.status === 'ready' && v.muxPlaybackId != null)`
+   - Prevents videos with null muxPlaybackId from appearing in dropdown (which caused wrong video playback)
+
+### Status: ✅ COMPLETE
+
+---
+
+## Bug Fixes (Loop 9) - 2026-04-01 - Membership Null Safety & Security Fix
+
+### CRITICAL Issues Fixed (2)
+
+#### CRITICAL #1: TypeScript Crash — `membership` Possibly Null in Student Workout Edit
+**Status:** Fixed
+- **Problem:** In `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`, the condition `if (membership || dbUser?.role === 'coach')` set `isTrainer = true` even when `membership` was null (coach via User.role). Then `membership.organizationId` was accessed directly, causing a null pointer crash.
+- **Fix:** Guarded `organizationVideo.findMany` with a ternary — only queries when `membership` is non-null, otherwise returns `[]`.
+- **File:** `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
+- **Change:** `organizationVideos = membership ? await db.organizationVideo.findMany({ where: { organizationId: membership.organizationId, ... } }) : []`
+
+#### CRITICAL #2: Same Membership Null Issue in Regular Workout Edit
+**Status:** Fixed
+- **Problem:** Same pattern in `app/dashboard/workouts/[workoutId]/edit/page.tsx` — used `membership?.organizationId` which passes `undefined` to Prisma when `membership` is null but role check passes.
+- **Fix:** Applied same ternary guard pattern.
+- **File:** `app/dashboard/workouts/[workoutId]/edit/page.tsx`
+
+### HIGH Issues Fixed (1)
+
+#### HIGH #1: Error Handler Sets `canAccessTrainer = true` (Security Issue)
+**Status:** Fixed
+- **Problem:** In both `app/trainer/layout.tsx` and `app/dashboard/layout.tsx`, the catch block set `canAccessTrainer = true` — fail-open security anti-pattern that would grant trainer access on any error (e.g., DB outage).
+- **Fix:** Changed to `canAccessTrainer = false` — fail secure.
+- **Files:** `app/trainer/layout.tsx`, `app/dashboard/layout.tsx`
+- **Change:** `canAccessTrainer = true` → `canAccessTrainer = false` in catch blocks
+
+---
+
+## Build Status
+
+✓ Build completed successfully with no TypeScript errors in edited files
+- All pre-existing test file errors (WorkoutWithExercises missing weekNumber/dayOfWeek) are unrelated to these changes
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx` | Guarded organizationVideo.findMany with membership ternary |
+| `app/dashboard/workouts/[workoutId]/edit/page.tsx` | Guarded organizationVideo.findMany with membership ternary |
+| `app/trainer/layout.tsx` | Changed catch block canAccessTrainer from true → false |
+| `app/dashboard/layout.tsx` | Changed catch block canAccessTrainer from true → false |
+
+---
+
+## Success Criteria Met
+
+- [x] No null pointer crash when coach has no organization membership but has User.role = 'coach'
+- [x] organizationVideo.findMany receives valid organizationId (never undefined)
+- [x] Security: errors in trainer access check fail secure (deny), not fail open (allow)
+- [x] Build passes without TypeScript errors in modified files

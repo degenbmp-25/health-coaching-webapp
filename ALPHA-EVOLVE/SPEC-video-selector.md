@@ -1,165 +1,30 @@
-# SPEC.md — Video Selector for Exercises
+# Video Selector Fix - SPEC
 
-**Project:** habithletics-redesign-evolve
 **Date:** 2026-04-01
-**Feature:** Video Selector Dropdown for Workout Exercises
-**Deployment:** https://habithletics-redesign-evolve-coral.vercel.app
+**Status:** Draft
+**Priority:** High
 
 ---
 
-## 1. Functionality Specification
+## Background
 
-### Goal
-Add a video selector dropdown to the workout edit form, allowing trainers/owners to assign Mux videos from their organization's video library to individual exercises.
+The video selector in the workout edit form has two distinct bugs:
 
-### User Flows
-
-#### Trainer Assigning Video to Exercise
-1. Trainer goes to workout edit page (`/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit`)
-2. Adds or edits an exercise
-3. Sees video selector dropdown below the standard fields (sets, reps, weight, notes)
-4. Selects a video from the dropdown (shows "Select video" or video title if selected)
-5. Video's `muxPlaybackId` is saved to `workout_exercises` when saving the workout
-6. When client views the workout, the video plays inline
-
-#### Client Viewing Workout
-1. Client sees the workout with exercises
-2. If exercise has a video assigned (`muxPlaybackId` exists), video plays inline
-3. Client does NOT see the video selector (only trainers/owners see it)
+1. **Video selector doesn't appear** for coach users (bmp19076@gmail.com)
+2. **Wrong video plays** for some exercises (e.g., "Book Openers" shows wrong video)
 
 ---
 
-## 2. Technical Approach
+## Problem 1: Video Selector Not Showing for Coach
 
-### A. API Changes
+### Root Cause
 
-#### `app/api/workouts/[workoutId]/route.ts`
+**File:** `app/dashboard/workouts/[workoutId]/edit/page.tsx`
+**File:** `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
 
-**Change:** Add `muxPlaybackId` to the exercise schema in PATCH handler.
-
-```typescript
-// In workoutPatchSchema.exercises:
-z.object({
-  exerciseId: z.string(),
-  sets: z.number().min(1),
-  reps: z.number().min(1),
-  weight: z.number().optional(),
-  notes: z.string().optional(),
-  order: z.number(),
-  muxPlaybackId: z.string().optional().nullable(), // NEW
-})
-```
-
-**Change:** Include `muxPlaybackId` when creating workout exercises:
+The `isTrainer` flag is determined by checking `OrganizationMember.role`:
 
 ```typescript
-// In exercises.create:
-create: body.exercises.map((exercise) => ({
-  exerciseId: exercise.exerciseId,
-  sets: exercise.sets,
-  reps: exercise.reps,
-  weight: exercise.weight,
-  notes: exercise.notes,
-  order: exercise.order,
-  muxPlaybackId: exercise.muxPlaybackId, // NEW
-}))
-```
-
----
-
-### B. Form Changes
-
-#### `components/workout/workout-edit-form.tsx`
-
-**Props to add:**
-```typescript
-interface WorkoutEditFormProps {
-  // ... existing props
-  videos?: OrganizationVideo[]      // NEW: organization's videos
-  isTrainer?: boolean              // NEW: show video selector if true
-  userOrgRole?: string | null      // NEW: user's role in org ('owner' | 'trainer' | 'client')
-}
-```
-
-**Schema change:**
-```typescript
-const workoutFormSchema = z.object({
-  // ... existing fields
-  exercises: z.array(
-    z.object({
-      // ... existing fields
-      muxPlaybackId: z.string().optional().nullable(), // NEW
-    })
-  ),
-})
-```
-
-**UI Changes:**
-1. Add video selector dropdown after the notes field in each exercise card
-2. Video selector only renders if `isTrainer === true` AND `videos` array has items
-3. If no videos or user is not trainer, don't show selector
-4. "No videos yet" state with link to `/trainer/videos` when `videos.length === 0`
-
-**Video Selector UI:**
-```tsx
-{isTrainer && (
-  <FormField
-    control={form.control}
-    name={`exercises.${index}.muxPlaybackId`}
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>Video</FormLabel>
-        <Select
-          onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-          defaultValue={field.value || "none"}
-        >
-          <FormControl>
-            <SelectTrigger>
-              <SelectValue placeholder="Select video (optional)" />
-            </SelectTrigger>
-          </FormControl>
-          <SelectContent>
-            <SelectItem value="none">No video</SelectItem>
-            {videos.filter(v => v.status === 'ready').map((video) => (
-              <SelectItem key={video.id} value={video.muxPlaybackId || video.id}>
-                {video.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {videos.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No videos yet. <Link href="/trainer/videos" className="underline">Upload one</Link>
-          </p>
-        )}
-      </FormItem>
-    )}
-  />
-)}
-```
-
-**On Submit:**
-Include `muxPlaybackId` in the exercises array sent to API.
-
----
-
-### C. Page Changes
-
-#### `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
-
-**Changes:**
-1. Import OrganizationVideo type
-2. Fetch organization membership for current user
-3. If trainer/owner, fetch organization's videos
-4. Pass `videos` and `isTrainer` props to WorkoutEditForm
-
-```typescript
-// After fetching exercises, before rendering WorkoutEditForm:
-
-// Get user's organization membership and videos
-let organizationVideos: any[] = []
-let isTrainer = false
-
 const membership = await db.organizationMember.findFirst({
   where: {
     userId: user.id,
@@ -170,145 +35,192 @@ const membership = await db.organizationMember.findFirst({
 
 if (membership) {
   isTrainer = true
-  organizationVideos = await db.organizationVideo.findMany({
-    where: { 
-      organizationId: membership.organizationId,
-      status: 'ready'
-    },
-    orderBy: { createdAt: 'desc' }
-  })
-}
-
-// Pass to form:
-<WorkoutEditForm
-  workout={workoutData}
-  exercises={exercises}
-  redirectUrl="/dashboard/coaching"
-  videos={organizationVideos}
-  isTrainer={isTrainer}
-/>
-```
-
-**Note:** Also need to include current `muxPlaybackId` in workout exercise data when fetching workout:
-
-```typescript
-// In the workout query include:
-exercises: {
-  include: {
-    exercise: true,
-  },
-  orderBy: {
-    order: 'asc',
-  },
-},
-
-// Transform:
-exercises: workout.exercises.map(we => ({
-  id: we.exerciseId,
-  name: we.exercise.name,
-  sets: we.sets,
-  reps: we.reps,
-  weight: we.weight,
-  notes: we.notes,
-  order: we.order,
-  muxPlaybackId: we.muxPlaybackId, // NEW
-})),
-```
-
----
-
-## 3. File Structure
-
-```
-habithletics-redesign-evolve/
-├── app/
-│   └── api/
-│       └── workouts/
-│           └── [workoutId]/
-│               └── route.ts           ← MODIFIED: Add muxPlaybackId to schema
-│   └── dashboard/
-│       └── coaching/
-│           └── students/
-│               └── [studentId]/
-│                   └── workouts/
-│                       └── [workoutId]/
-│                           └── edit/
-│                               └── page.tsx  ← MODIFIED: Fetch videos, pass to form
-├── components/
-│   └── workout/
-│       └── workout-edit-form.tsx     ← MODIFIED: Add video selector dropdown
-└── ALPHA-EVOLVE/
-    └── SPEC-video-selector.md         ← This file
-```
-
----
-
-## 4. Dependencies
-
-No new dependencies required. Using existing:
-- `Select` component from shadcn/ui
-- `Link` from next/link
-- `db` (Prisma client)
-- `OrganizationVideo` model (already exists)
-
----
-
-## 5. Type Definitions
-
-```typescript
-// OrganizationVideo type (from Prisma schema)
-interface OrganizationVideo {
-  id: string
-  organizationId: string
-  muxAssetId: string
-  muxPlaybackId: string | null
-  title: string
-  thumbnailUrl: string | null
-  duration: number | null
-  status: 'pending' | 'ready' | 'errored'
-  createdAt: Date
-  updatedAt: Date
+  ...
 }
 ```
 
+**The problem:** This check only looks for `owner` or `trainer` roles. The coach account (bmp19076@gmail.com) has `User.role = 'coach'` in the database, but their `OrganizationMember.role` may be `'coach'` or they may not have an OrganizationMember record at all.
+
+There are **two separate role systems** being conflated:
+1. `User.role` (db) — values: `'user'`, `'coach'`
+2. `OrganizationMember.role` (db) — values: `'owner'`, `'trainer'`, `'client'`
+
+The coach's `User.role` is `'coach'`, but the code only checks `OrganizationMember.role`. This is why `isTrainer` is `false` for the coach.
+
+### Fix Approach
+
+Expand the `isTrainer` check to also consider `User.role === 'coach'` OR include `'coach'` in the OrganizationMember query.
+
+**Option A (Recommended):** Add `role: { in: ['owner', 'trainer', 'coach'] }` to the OrganizationMember check, and also check `User.role === 'coach'`.
+
+**Option B:** Create a unified helper function `canManageWorkouts(user)` that checks all valid scenarios.
+
+### File Changes
+
+**File:** `app/dashboard/workouts/[workoutId]/edit/page.tsx`
+```typescript
+// BEFORE
+const membership = await db.organizationMember.findFirst({
+  where: {
+    userId: user.id,
+    role: { in: ['owner', 'trainer'] }
+  },
+  include: { organization: true }
+})
+
+// AFTER
+// Also check User.role === 'coach' since coaches manage workouts
+const dbUser = await db.user.findUnique({
+  where: { id: user.id },
+  select: { role: true }
+})
+
+const membership = await db.organizationMember.findFirst({
+  where: {
+    userId: user.id,
+    role: { in: ['owner', 'trainer', 'coach'] }
+  },
+  include: { organization: true }
+})
+
+if (membership || dbUser?.role === 'coach') {
+  isTrainer = true
+  ...
+}
+```
+
+**File:** `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
+- Same change as above (this file already fetches `dbUser`, just update the condition)
+
+**File:** `app/trainer/layout.tsx`
+**File:** `app/dashboard/layout.tsx`
+- Add `'coach'` to the role check so trainers/coaches see the TRAINER nav section
+
 ---
 
-## 6. Edge Cases
+## Problem 2: Wrong Video Assigned to Exercise
 
-| Scenario | Behavior |
-|----------|----------|
-| No videos in library | Show "No videos yet. Upload one" link |
-| Video still processing (status=pending) | Don't show in dropdown |
-| Video errored (status=errored) | Don't show in dropdown |
-| Client viewing workout | No video selector shown |
-| Trainer with no org membership | No video selector shown |
-| Video removed from library after assignment | Keep muxPlaybackId on exercise (no cascade delete) |
+### Root Cause
+
+**File:** `components/workout/workout-edit-form.tsx`
+
+The video selector filter only checks `status === 'ready'`:
+
+```typescript
+const readyVideos = videos.filter(v => v.status === 'ready')
+```
+
+But `OrganizationVideo.muxPlaybackId` can be `null` even when `status === 'ready'`. This happens when:
+1. The video was uploaded but Mux hasn't returned the playback ID yet
+2. The webhook that sets `muxPlaybackId` failed or never fired
+3. The video was imported/migrated without the `muxPlaybackId`
+
+When `muxPlaybackId` is null, the SelectItem value falls back to `video.id`:
+
+```typescript
+<SelectItem 
+  key={video.id} 
+  value={video.muxPlaybackId || video.id}  // Falls back to DB ID when null!
+>
+  {video.title}
+</SelectItem>
+```
+
+When the form submits, it sends `muxPlaybackId = video.id` (the internal DB UUID) instead of a real Mux playback ID. The VideoPlayer then tries to stream from `https://stream.mux.com/[DB-UUID].m3u8` which doesn't exist, resulting in a wrong/broken video.
+
+### Fix Approach
+
+**Primary fix (frontend guard):** Filter out videos with null `muxPlaybackId`:
+
+```typescript
+const readyVideos = videos.filter(v => v.status === 'ready' && v.muxPlaybackId != null)
+```
+
+This ensures only videos with valid muxPlaybackId appear in the dropdown.
+
+**Secondary fix (DB migration):** Investigate and fix `OrganizationVideo` records where `muxPlaybackId` is null but `status === 'ready'`. Run a migration to either:
+1. Re-trigger Mux asset lookup for those videos
+2. Or mark them as errored if the Mux asset truly doesn't exist
+
+### File Changes
+
+**File:** `components/workout/workout-edit-form.tsx`
+
+```typescript
+// BEFORE
+const readyVideos = videos.filter(v => v.status === 'ready')
+
+// AFTER  
+const readyVideos = videos.filter(v => v.status === 'ready' && v.muxPlaybackId != null)
+```
 
 ---
 
-## 7. Success Criteria
+## Additional Issue: Video Selector Value Duplication Risk
 
-- [ ] Trainer can assign a video to any exercise in their program
-- [ ] Client viewing workout sees the video play correctly (via existing VideoPlayer)
-- [ ] Video selector only visible to trainer/owner roles
-- [ ] Empty state shows "No videos yet" with link to `/trainer/videos`
-- [ ] TypeScript compiles without errors
-- [ ] API saves muxPlaybackId correctly
+**File:** `components/workout/workout-edit-form.tsx`
+
+The `SelectItem value` uses `video.muxPlaybackId || video.id`. If two videos in the same organization somehow share the same `muxPlaybackId` (e.g., duplicate Mux assets), the dropdown would have duplicate values and undefined behavior.
+
+**Fix:** Use `video.id` as the stable internal identifier, and look up the muxPlaybackId when saving. This requires changing the data flow:
+
+1. Store `video.id` (not muxPlaybackId) in the form
+2. On save, look up `muxPlaybackId` from `OrganizationVideo` by `id`
+3. Store the muxPlaybackId in `WorkoutExercise.muxPlaybackId`
+
+This is a more robust fix for long-term correctness but requires a larger change.
+
+### Recommended: Quick Fix First
+
+For the immediate fix, just add the `muxPlaybackId != null` filter. This solves the problem without changing the data flow.
 
 ---
 
-## 8. Test Accounts
+## Migration Plan
 
-| Role | Email | Password |
-|------|-------|---------|
-| Trainer/Owner | thehivemindintelligence@gmail.com | clawdaunt |
-| Client | (any assigned client) | - |
+### Phase 1: Quick Fix (Low Risk)
+1. Add `muxPlaybackId != null` filter in `workout-edit-form.tsx`
+2. Add `'coach'` to `OrganizationMember.role` checks in both edit pages
+3. Add `'coach'` to layout role checks
+
+### Phase 2: DB Audit
+1. Query `SELECT * FROM organization_videos WHERE status = 'ready' AND mux_playback_id IS NULL`
+2. For each row, check if the Mux asset exists via Mux API
+3. Update `muxPlaybackId` if found, or mark as errored
+
+### Phase 3: Data Flow Improvement (Future)
+1. Change video selector to store `video.id` in form
+2. On workout save, resolve muxPlaybackId server-side
+3. This prevents invalid IDs from ever being stored
 
 ---
 
-## 9. Out of Scope
+## Test Plan
 
-- Video upload (already exists at `/trainer/videos`)
-- Video deletion (already exists)
-- Multiple videos per exercise
-- Video timestamp/clip selection
+1. Log in as bmp19076@gmail.com (coach)
+2. Navigate to `/dashboard/workouts/[workoutId]/edit`
+3. Verify video selector dropdown appears
+4. Verify only videos with valid muxPlaybackId appear
+5. Select a video and save
+6. Verify correct video plays in workout view
+7. Check no console errors
+
+---
+
+## Files to Modify
+
+| File | Change | Risk |
+|------|--------|------|
+| `app/dashboard/workouts/[workoutId]/edit/page.tsx` | Expand role check | Low |
+| `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx` | Expand role check | Low |
+| `app/trainer/layout.tsx` | Add 'coach' to role check | Low |
+| `app/dashboard/layout.tsx` | Add 'coach' to role check | Low |
+| `components/workout/workout-edit-form.tsx` | Filter null muxPlaybackId | Low |
+
+---
+
+## Root Cause Summary
+
+1. **Coach can't see video selector:** The role check uses `OrganizationMember.role IN ('owner', 'trainer')` but coach's role is stored as `'coach'` in OrganizationMember or `'coach'` in User.role. Two separate role systems are being used inconsistently.
+
+2. **Wrong video plays:** `OrganizationVideo` entries with `status='ready'` but `muxPlaybackId=NULL` still appear in the dropdown. Their `SelectItem value` falls back to the internal DB UUID, which is not a valid Mux playback ID, causing wrong video or no video.
