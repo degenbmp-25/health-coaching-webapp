@@ -151,13 +151,14 @@ export async function getStudentWorkouts(studentId: string, coachId: string) {
 }
 
 /**
- * Get a single workout by ID.
- * CRITICAL #2 FIX: This function requires prior authorization check.
- * It only verifies data scoping (workout belongs to user), not organizational access.
- * Callers MUST ensure the authorizedUserId has rights to access this workout's user's data.
+ * Get a single workout by ID with proper authorization.
+ * - Users can access their own workouts
+ * - Coaches can access their students' workouts
+ * - Trainers/owners can access workouts in their organization
  */
 export async function getWorkout(workoutId: string, authorizedUserId: string) {
-  return await db.workout.findFirst({
+  // First try: direct ownership
+  const workout = await db.workout.findFirst({
     where: {
       id: workoutId,
       userId: authorizedUserId,
@@ -172,7 +173,79 @@ export async function getWorkout(workoutId: string, authorizedUserId: string) {
         },
       },
     },
-  })
+  });
+
+  if (workout) return workout;
+
+  // Second try: check if authorized user is the coach of the workout owner
+  const workoutOwner = await db.workout.findUnique({
+    where: { id: workoutId },
+    select: { userId: true },
+  });
+
+  if (workoutOwner) {
+    // Check if the authorized user is the coach of the workout owner
+    const isCoachOfOwner = await db.user.findFirst({
+      where: {
+        id: workoutOwner.userId,
+        coachId: authorizedUserId,
+      },
+    });
+
+    if (isCoachOfOwner) {
+      return await db.workout.findUnique({
+        where: { id: workoutId },
+        include: {
+          exercises: {
+            include: {
+              exercise: true,
+            },
+            orderBy: {
+              order: "asc",
+            },
+          },
+        },
+      });
+    }
+
+    // Third try: check if authorized user is a trainer/owner in the org
+    const membership = await db.organizationMember.findFirst({
+      where: {
+        userId: authorizedUserId,
+        role: { in: ["owner", "trainer"] },
+      },
+    });
+
+    if (membership) {
+      // Check if workout is in a program within the trainer's organization
+      const workoutWithProgram = await db.workout.findUnique({
+        where: { id: workoutId },
+        include: {
+          program: {
+            select: { organizationId: true },
+          },
+        },
+      });
+
+      if (workoutWithProgram?.program?.organizationId === membership.organizationId) {
+        return await db.workout.findUnique({
+          where: { id: workoutId },
+          include: {
+            exercises: {
+              include: {
+                exercise: true,
+              },
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        });
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function getStudentWorkout(workoutId: string, studentId: string, coachId: string) {

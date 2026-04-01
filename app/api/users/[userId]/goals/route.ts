@@ -30,15 +30,24 @@ export async function GET(req: Request, { params }: UserGoalsParams) {
     })
 
     // Also check org membership as fallback (allows trainers/owners to view any trainee goals)
+    // Note: "coach" is NOT a valid OrganizationMember.role - it's a User.role value
+    // OrganizationMember.role values are: "owner", "trainer", "client"
     const membership = await db.organizationMember.findFirst({
       where: {
         userId: currentUser.id,
-        role: { in: ["owner", "trainer", "coach"] },
+        role: { in: ["owner", "trainer"] },
       },
     })
 
+    // Also check if current user is a coach (User.role === "coach")
+    const currentUserDb = await db.user.findUnique({
+      where: { id: currentUser.id },
+      select: { role: true }
+    })
+    const isCoach = currentUserDb?.role === "coach"
+
     // Allow if user is viewing their own goals, is the coach, or has org-level trainer access
-    if (currentUser.id !== targetDbUserId && !student && !membership) {
+    if (currentUser.id !== targetDbUserId && !student && !membership && !isCoach) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
