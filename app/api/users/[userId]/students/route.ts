@@ -1,43 +1,88 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
 
 import { db } from "@/lib/db"
+import { requireAuth } from "@/lib/auth-utils"
 
-// Get all students for a coach
+// GET /api/users/[userId]/students - Get coach's students
 export async function GET(
   req: Request,
   { params }: { params: { userId: string } }
 ) {
   try {
-    const authRes = await requireAuth();
-    if (authRes instanceof NextResponse) return authRes;
-    const currentUser = authRes;
+    const user = await requireAuth()
 
-    // Only the coach themselves can view their students
-    // Compare Clerk IDs since the frontend sends Clerk ID
-    if (currentUser.clerkId !== params.userId) {
+    if (user instanceof NextResponse) {
+      return user
+    }
+
+    // Only the user themselves can view their students
+    if (user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
-    // Check if user is a coach
-    const coach = await db.user.findUnique({
+    // Get users where this user is the coach
+    const students = await db.user.findMany({
       where: {
-        clerkId: params.userId,
+        coachId: user.id,
       },
       select: {
         id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        image: true,
         role: true,
       },
     })
 
-    if (!coach || coach.role !== "coach") {
-      return new NextResponse("User is not a coach", { status: 400 })
+    return NextResponse.json(students)
+  } catch (error) {
+    console.error("[USERS_STUDENTS_GET]", error)
+    return new NextResponse("Internal Error", { status: 500 })
+  }
+}
+
+// POST /api/users/[userId]/students - Coach adds a client
+export async function POST(
+  req: Request,
+  { params }: { params: { userId: string } }
+) {
+  try {
+    const user = await requireAuth()
+
+    if (user instanceof NextResponse) {
+      return user
     }
 
-    // Get students where coachId matches the database ID of the coach
-    const students = await db.user.findMany({
+    // Only the user themselves can add students to themselves
+    if (user.id !== params.userId) {
+      return new NextResponse("Forbidden", { status: 403 })
+    }
+
+    const { clientId } = await req.json()
+
+    if (!clientId) {
+      return new NextResponse("Client ID is required", { status: 400 })
+    }
+
+    // Verify the client exists
+    const client = await db.user.findUnique({
       where: {
-        coachId: coach.id,
+        id: clientId,
+      },
+    })
+
+    if (!client) {
+      return new NextResponse("Client not found", { status: 404 })
+    }
+
+    // Set the client's coachId to this coach
+    const updatedClient = await db.user.update({
+      where: {
+        id: clientId,
+      },
+      data: {
+        coachId: user.id,
       },
       select: {
         id: true,
@@ -48,9 +93,9 @@ export async function GET(
       },
     })
 
-    return NextResponse.json(students)
+    return NextResponse.json(updatedClient)
   } catch (error) {
-    console.error("[COACH_STUDENTS_GET]", error)
+    console.error("[USERS_STUDENTS_POST]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

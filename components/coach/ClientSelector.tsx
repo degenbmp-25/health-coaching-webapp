@@ -65,13 +65,13 @@ export function ClientSelector({ coachId, onClientAdded }: ClientSelectorProps) 
       setAddingId(userId)
       setError(null)
       
-      // Call the coach endpoint - this sets the user's coachId to this coach
-      const response = await fetch(`/api/users/${userId}/coach`, {
-        method: "PATCH",
+      // Call the students endpoint - this sets the user's coachId to this coach
+      const response = await fetch(`/api/users/${coachId}/students`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ coachId }),
+        body: JSON.stringify({ clientId: userId }),
       })
 
       if (!response.ok) {
