@@ -38,7 +38,30 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
     },
   })
 
-  // Transform workout data for the form
+  // Get user's organization membership and videos (for video selector)
+  let organizationVideos: any[] = []
+  let isTrainer = false
+
+  const membership = await db.organizationMember.findFirst({
+    where: {
+      userId: user.id,
+      role: { in: ['owner', 'trainer'] }
+    },
+    include: { organization: true }
+  })
+
+  if (membership) {
+    isTrainer = true
+    organizationVideos = await db.organizationVideo.findMany({
+      where: {
+        organizationId: membership.organizationId,
+        status: 'ready'
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+
+  // Transform workout data for the form (include muxPlaybackId)
   const workoutData = {
     id: workout.id,
     name: workout.name,
@@ -50,6 +73,7 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
       reps: we.reps,
       weight: we.weight,
       notes: we.notes,
+      muxPlaybackId: we.muxPlaybackId,
     })),
   }
 
@@ -63,8 +87,10 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
         <WorkoutEditForm
           workout={workoutData}
           exercises={exercises}
+          videos={organizationVideos}
+          isTrainer={isTrainer}
         />
       </div>
     </Shell>
   )
-} 
+}

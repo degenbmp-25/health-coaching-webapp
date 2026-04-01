@@ -81,7 +81,30 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     },
   })
 
-  // Transform workout data for the form
+  // Get user's organization membership and videos (for video selector)
+  let organizationVideos: any[] = []
+  let isTrainer = false
+
+  const membership = await db.organizationMember.findFirst({
+    where: {
+      userId: user.id,
+      role: { in: ['owner', 'trainer'] }
+    },
+    include: { organization: true }
+  })
+
+  if (membership) {
+    isTrainer = true
+    organizationVideos = await db.organizationVideo.findMany({
+      where: {
+        organizationId: membership.organizationId,
+        status: 'ready'
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+
+  // Transform workout data for the form (include muxPlaybackId)
   const workoutData = {
     id: workout.id,
     name: workout.name,
@@ -94,6 +117,7 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
       weight: we.weight,
       notes: we.notes,
       order: we.order,
+      muxPlaybackId: we.muxPlaybackId,
     })),
   }
 
@@ -108,8 +132,10 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
           workout={workoutData}
           exercises={exercises}
           redirectUrl="/dashboard/coaching"
+          videos={organizationVideos}
+          isTrainer={isTrainer}
         />
       </div>
     </Shell>
   )
-} 
+}

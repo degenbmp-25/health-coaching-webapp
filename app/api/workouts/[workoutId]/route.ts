@@ -24,6 +24,7 @@ const workoutPatchSchema = z.object({
       weight: z.number().optional(),
       notes: z.string().optional(),
       order: z.number(),
+      muxPlaybackId: z.string().optional().nullable(),
     })
   ),
 })
@@ -93,6 +94,7 @@ export async function PATCH(
             weight: exercise.weight,
             notes: exercise.notes,
             order: exercise.order,
+            muxPlaybackId: exercise.muxPlaybackId,
           })),
         },
       },

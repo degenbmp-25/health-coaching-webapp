@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useFieldArray, useForm } from "react-hook-form"
@@ -44,6 +45,7 @@ const workoutFormSchema = z.object({
       reps: z.coerce.number().min(1),
       weight: z.coerce.number().optional(),
       notes: z.string().optional(),
+      muxPlaybackId: z.string().optional().nullable(),
     })
   ),
 })
@@ -55,6 +57,19 @@ interface Exercise {
   name: string
   category: string
   muscleGroup: string
+}
+
+interface OrganizationVideo {
+  id: string
+  organizationId: string
+  muxAssetId: string
+  muxPlaybackId: string | null
+  title: string
+  thumbnailUrl: string | null
+  duration: number | null
+  status: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 interface WorkoutEditFormProps {
@@ -69,15 +84,27 @@ interface WorkoutEditFormProps {
       reps: number
       weight?: number | null
       notes?: string | null
+      muxPlaybackId?: string | null
     }[]
   }
   exercises: Exercise[]
   redirectUrl?: string
+  videos?: OrganizationVideo[]
+  isTrainer?: boolean
 }
 
-export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEditFormProps) {
+export function WorkoutEditForm({ 
+  workout, 
+  exercises, 
+  redirectUrl,
+  videos = [],
+  isTrainer = false 
+}: WorkoutEditFormProps) {
   const router = useRouter()
   const [isSaving, setIsSaving] = React.useState<boolean>(false)
+
+  // Filter to only ready videos
+  const readyVideos = videos.filter(v => v.status === 'ready')
 
   const form = useForm<FormData>({
     resolver: zodResolver(workoutFormSchema),
@@ -90,6 +117,7 @@ export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEdit
         reps: exercise.reps,
         weight: exercise.weight || undefined,
         notes: exercise.notes || undefined,
+        muxPlaybackId: exercise.muxPlaybackId || undefined,
       })) || [],
     },
   })
@@ -133,6 +161,7 @@ export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEdit
             weight: exercise.weight,
             notes: exercise.notes,
             order: index,
+            muxPlaybackId: exercise.muxPlaybackId || null,
           })),
         }),
       })
@@ -224,6 +253,7 @@ export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEdit
                   reps: 10,
                   weight: undefined,
                   notes: "",
+                  muxPlaybackId: undefined,
                 })
               }
             >
@@ -348,6 +378,46 @@ export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEdit
                       </FormItem>
                     )}
                   />
+
+                  {/* Video Selector - only show for trainers */}
+                  {isTrainer && (
+                    <FormField
+                      control={form.control}
+                      name={`exercises.${index}.muxPlaybackId`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Video</FormLabel>
+                          <Select
+                            onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                            defaultValue={field.value || "none"}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select video (optional)" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">No video</SelectItem>
+                              {readyVideos.map((video) => (
+                                <SelectItem 
+                                  key={video.id} 
+                                  value={video.muxPlaybackId || video.id}
+                                >
+                                  {video.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {readyVideos.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No videos yet. <Link href="/trainer/videos" className="underline">Upload one</Link>
+                            </p>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
               </Card>
             ))}
@@ -361,4 +431,4 @@ export function WorkoutEditForm({ workout, exercises, redirectUrl }: WorkoutEdit
       </form>
     </Form>
   )
-} 
+}
