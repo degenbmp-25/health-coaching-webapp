@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server"
 
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
+import { getClerkUserId } from "@/lib/api/id-utils"
 
 export async function PATCH(
   req: Request,
@@ -16,9 +17,9 @@ export async function PATCH(
     }
 
     // Only users can change their own role
-    // params.userId is Clerk ID, user.id is DB ID - we allow self-update since requireAuth() validates identity
-    // For additional safety, verify the Clerk ID matches the authenticated user's Clerk ID
-    if (user.clerkId !== params.userId) {
+    // params.userId is Clerk ID, user.clerkId is also Clerk ID
+    const clerkUserId = await getClerkUserId()
+    if (clerkUserId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -30,7 +31,7 @@ export async function PATCH(
       })
     }
 
-    // Update using DB ID (user.id) - params.userId is Clerk ID
+    // Update using DB ID (user.id) - params.userId is Clerk ID, but we need DB ID for update
     const updatedUser = await db.user.update({
       where: {
         id: user.id,
@@ -53,4 +54,4 @@ export async function PATCH(
     console.error("[USER_ROLE_PATCH]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

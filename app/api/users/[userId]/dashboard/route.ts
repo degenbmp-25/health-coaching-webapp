@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
 import { dateRangeParams } from "@/lib/utils"
 import { getDashboardData } from "@/lib/api/dashboard"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 // Get student dashboard data for coaches
 export async function GET(
@@ -17,6 +18,12 @@ export async function GET(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     const { searchParams } = new URL(req.url)
     const from = searchParams.get("from")
     const to = searchParams.get("to")
@@ -28,12 +35,11 @@ export async function GET(
     })
 
     // Authorization: own data or org trainer/owner
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       const membership = await db.organizationMember.findFirst({
         where: {
           userId: user.id,
-          role: { in: ["owner", "trainer"] },
-          organizationId: params.userId,
+          role: { in: ["owner", "trainer", "coach"] },
         },
       })
       if (!membership) {
@@ -41,7 +47,7 @@ export async function GET(
       }
     }
 
-    const dashboardData = await getDashboardData(params.userId, dateRange)
+    const dashboardData = await getDashboardData(targetDbUserId, dateRange)
 
     return NextResponse.json(dashboardData)
   } catch (error) {

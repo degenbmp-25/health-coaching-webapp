@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 // GET /api/users/[userId]/students - Get coach's students
 export async function GET(
@@ -15,8 +16,14 @@ export async function GET(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Only the user themselves can view their students
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -54,13 +61,25 @@ export async function POST(
       return user
     }
 
-    // Only coaches can add students
-    if (user.role !== "coach") {
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
+    // Only coaches can add students - check OrganizationMember.role
+    const membership = await db.organizationMember.findFirst({
+      where: {
+        userId: user.id,
+        role: { in: ["owner", "trainer", "coach"] },
+      },
+    })
+    if (!membership) {
       return new NextResponse("Forbidden - Coach access required", { status: 403 })
     }
 
     // Only the user themselves can add students to themselves
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 
 import { db } from "@/lib/db"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 const mealCreateSchema = z.object({
   name: z.string(),
@@ -24,17 +25,9 @@ export async function GET(
     if (session instanceof NextResponse) return session;
     const currentUser = session;
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
       return new NextResponse("User not found", { status: 404 })
     }
 
@@ -43,10 +36,10 @@ export async function GET(
     const date = dateParam ? new Date(dateParam) : undefined
     
     // If the user is looking at their own meals
-    if (currentUser.id === params.userId) {
+    if (currentUser.id === targetDbUserId) {
       const meals = await db.meal.findMany({
         where: {
-          userId: targetUser.id,
+          userId: targetDbUserId,
           ...(date && {
             date: {
               gte: new Date(date.setHours(0, 0, 0, 0)),
@@ -65,7 +58,7 @@ export async function GET(
     // If a coach is looking at their student's meals
     const student = await db.user.findFirst({
       where: {
-        id: targetUser.id,
+        id: targetDbUserId,
         coachId: currentUser.id,
       },
     })
@@ -76,7 +69,7 @@ export async function GET(
     
     const meals = await db.meal.findMany({
       where: {
-        userId: targetUser.id,
+        userId: targetDbUserId,
         ...(date && {
           date: {
             gte: new Date(date.setHours(0, 0, 0, 0)),
@@ -106,26 +99,18 @@ export async function POST(
     if (session instanceof NextResponse) return session;
     const currentUser = session;
 
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
       return new NextResponse("User not found", { status: 404 })
     }
     
     // Check if it's the user creating their own meal or if it's their coach
-    if (currentUser.id !== params.userId) {
+    if (currentUser.id !== targetDbUserId) {
       // Verify the coach-student relationship
       const student = await db.user.findFirst({
         where: {
-          id: targetUser.id,
+          id: targetDbUserId,
           coachId: currentUser.id,
         },
       })
@@ -150,7 +135,7 @@ export async function POST(
         carbs: body.carbs,
         fat: body.fat,
         date: body.date,
-        userId: targetUser.id,
+        userId: targetDbUserId,
       },
     })
 
@@ -163,4 +148,4 @@ export async function POST(
     console.error("[USER_MEALS_POST]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

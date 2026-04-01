@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
+import { resolveClerkIdToDbUserId, getClerkUserId } from "@/lib/api/id-utils"
 
 // Get activities for a user (accessible by the user or org trainers/owners)
 export async function GET(
@@ -15,13 +16,18 @@ export async function GET(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Authorization: own data or org trainer/owner
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       const membership = await db.organizationMember.findFirst({
         where: {
           userId: user.id,
-          role: { in: ["owner", "trainer"] },
-          organizationId: params.userId,
+          role: { in: ["owner", "trainer", "coach"] },
         },
       })
       if (!membership) {
@@ -31,7 +37,7 @@ export async function GET(
 
     const activities = await db.activity.findMany({
       where: {
-        userId: params.userId,
+        userId: targetDbUserId,
       },
       include: {
         activityLogs: {
@@ -62,13 +68,18 @@ export async function POST(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Authorization: own data or org trainer/owner
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       const membership = await db.organizationMember.findFirst({
         where: {
           userId: user.id,
-          role: { in: ["owner", "trainer"] },
-          organizationId: params.userId,
+          role: { in: ["owner", "trainer", "coach"] },
         },
       })
       if (!membership) {
@@ -84,7 +95,7 @@ export async function POST(
         name,
         description,
         colorCode,
-        userId: params.userId,
+        userId: targetDbUserId,
       },
     })
 

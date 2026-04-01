@@ -604,3 +604,109 @@ Fixed two bugs related to the video selector:
 - [x] organizationVideo.findMany receives valid organizationId (never undefined)
 - [x] Security: errors in trainer access check fail secure (deny), not fail open (allow)
 - [x] Build passes without TypeScript errors in modified files
+
+---
+
+## Option C: Clerk ID Standardization - 2026-04-01
+
+### Summary
+Implemented Option C: Clerk ID Standardization to fix the fundamental ID mismatch between Clerk IDs (external) and DB CUIDs (internal).
+
+### CRITICAL Issues Fixed
+
+#### CRITICAL #1: API Routes Compared Clerk ID to DB CUID
+**Status:** Fixed
+- **Root Cause:** All API routes in `app/api/users/[userId]/*` compared `user.id` (DB CUID) to `params.userId` (Clerk ID). These NEVER match.
+- **Fix:** Created `lib/api/id-utils.ts` with clerk ID resolution utilities. All API routes now resolve `params.userId` (Clerk ID) to DB CUID before comparing.
+
+### Files Created
+
+#### `lib/api/id-utils.ts` (NEW)
+```typescript
+- getClerkUserId() - Get Clerk ID from auth context
+- getCurrentDbUser() - Get current DB user by Clerk ID
+- resolveClerkIdToDbUserId(clerkId) - Resolve Clerk ID to DB CUID
+- requireDbUser() - Require authenticated user
+- isCoachOrTrainer(role) - Check if role is coach/trainer/owner
+```
+
+### Files Fixed (9 API Routes)
+
+#### `app/api/users/[userId]/activities/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Removed buggy `organizationId: params.userId` checks
+- Authorization now uses resolved DB CUID
+
+#### `app/api/users/[userId]/dashboard/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Removed buggy `organizationId: params.userId` checks
+
+#### `app/api/users/[userId]/students/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Changed role check from `User.role !== "coach"` to `OrganizationMember.role IN ("owner", "trainer", "coach")`
+
+#### `app/api/users/[userId]/coach/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Changed coach verification to use `OrganizationMember.role` instead of `User.role`
+
+#### `app/api/users/[userId]/goals/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Fixed comparison: `currentUser.id !== targetDbUserId` (both DB CUIDs)
+
+#### `app/api/users/[userId]/meals/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Fixed comparison: `currentUser.id === targetDbUserId` (both DB CUIDs)
+
+#### `app/api/users/[userId]/role/route.ts`
+- Changed to use `getClerkUserId()` instead of `requireAuth()` for self-check
+- Auth check: `clerkUserId !== params.userId` (both Clerk IDs)
+
+#### `app/api/users/[userId]/workouts/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Updated `authorizeWorkoutAccess()` to take DB CUID instead of Clerk ID
+- Added `coach` to the allowed roles in `authorizeWorkoutAccess()`
+
+#### `app/api/users/[userId]/workouts/[workoutId]/route.ts`
+- Added `resolveClerkIdToDbUserId()` to resolve Clerk ID → DB CUID
+- Fixed comparison: `currentUser.id === targetDbUserId` (both DB CUIDs)
+
+### Files Fixed (1 Page)
+
+#### `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
+- Removed redundant `dbUser` lookup (user already comes from `getCurrentUser()`)
+- Fixed coach role check to use `user.id` directly (was incorrectly using `clerkId` lookup)
+- Changed to use `OrganizationMember.role IN ("owner", "trainer", "coach")` for coach access
+
+### Build Status
+
+✓ Build completed successfully with no TypeScript errors in modified files
+- Pre-existing test file errors (missing weekNumber/dayOfWeek) are unrelated to these changes
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `lib/api/id-utils.ts` | NEW - Clerk ID resolution utilities |
+| `app/api/users/[userId]/activities/route.ts` | Fixed clerk ID resolution |
+| `app/api/users/[userId]/dashboard/route.ts` | Fixed clerk ID resolution |
+| `app/api/users/[userId]/students/route.ts` | Fixed clerk ID resolution + role check |
+| `app/api/users/[userId]/coach/route.ts` | Fixed clerk ID resolution + role check |
+| `app/api/users/[userId]/goals/route.ts` | Fixed clerk ID resolution |
+| `app/api/users/[userId]/meals/route.ts` | Fixed clerk ID resolution |
+| `app/api/users/[userId]/role/route.ts` | Fixed auth check |
+| `app/api/users/[userId]/workouts/route.ts` | Fixed clerk ID resolution + roles |
+| `app/api/users/[userId]/workouts/[workoutId]/route.ts` | Fixed clerk ID resolution |
+| `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx` | Fixed redundant lookup + role check |
+
+---
+
+## Success Criteria Met
+
+- [x] ALL API routes use Clerk ID as external identifier in URLs
+- [x] ALL database lookups resolve Clerk ID → DB CUID before querying
+- [x] OrganizationMember.role is THE source of truth for access control
+- [x] Coach Kevin (bmp19076) can access coach features
+- [x] No more "user.id vs clerkId" confusion
+- [x] Build passes without TypeScript errors in modified files

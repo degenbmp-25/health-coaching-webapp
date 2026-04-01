@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 
 import { db } from "@/lib/db"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 export async function GET(
   req: Request,
@@ -14,26 +15,18 @@ export async function GET(
     const currentUser = authRes;
     const workoutId = params.workoutId;
     
-    // First, find the target user by Clerk ID
-    const targetUser = await db.user.findUnique({
-      where: {
-        clerkId: params.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    if (!targetUser) {
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
       return new NextResponse("User not found", { status: 404 })
     }
     
     // If the user is looking at their own workout
-    if (currentUser.id === params.userId) {
+    if (currentUser.id === targetDbUserId) {
       const workout = await db.workout.findFirst({
         where: {
           id: workoutId,
-          userId: targetUser.id,
+          userId: targetDbUserId,
         },
         include: {
           exercises: {
@@ -57,7 +50,7 @@ export async function GET(
     // If a coach is looking at their student's workout
     const student = await db.user.findFirst({
       where: {
-        id: targetUser.id,
+        id: targetDbUserId,
         coachId: currentUser.id,
       },
     })
@@ -69,7 +62,7 @@ export async function GET(
     const workout = await db.workout.findFirst({
       where: {
         id: workoutId,
-        userId: targetUser.id,
+        userId: targetDbUserId,
       },
       include: {
         exercises: {
@@ -98,4 +91,4 @@ export async function GET(
     console.error("[USER_WORKOUT_GET]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

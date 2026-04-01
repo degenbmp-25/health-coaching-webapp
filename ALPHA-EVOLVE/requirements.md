@@ -1,50 +1,95 @@
-# Alpha-Evolve Requirements: Coach Add Client Fix
+# Alpha-Evolve Requirements: Option C - Clerk ID Standardization
 
-**Codebase:** habithletics-redesign-evolve
-**Date:** 2026-04-01
-**Priority:** CRITICAL - blocker for going live
-**Deployment URL:** https://habithletics-redesign-evolve-coral.vercel.app
+## Project
+Habithletics - Health Coaching Webapp
 
-## Issues to Fix
+## Context
+We've been patching the same Clerk ID vs DB CUID mismatch bug repeatedly. Each fix introduces new bugs. The foundation is cracked.
 
-### Issue 1: "Add as Client" Returns 403 Forbidden (CRITICAL)
-**Current behavior:** Coach clicks "Add as Client" button, gets "Forbidden" error
-**Root cause:** The ClientSelector component calls `/api/users/${userId}/coach` PATCH, but that endpoint only allows users to set their OWN coach, not for coaches to set clients.
+## The Problem
 
-**Expected behavior:** Coach should be able to search for users and add them as clients.
+### IDENTITY CRISIS
+The system has THREE conflicting identity systems:
 
-### Issue 2: Client Search Only Works by Email (HIGH)
-**Current behavior:** ClientSelector only searches users by email address
-**Expected behavior:** Client search should find users by:
-- Email address (exact or partial match)
-- Name (exact or partial match)
+1. **Clerk Auth** provides `user.id` = Clerk ID format (`user_xxx`)
+2. **Database User table** has `User.id` = internal CUID (`cmncxxx`)
+3. **Database User.clerkId** = Clerk ID (stored for reference)
 
-## Technical Context
+Every API route that does `where: { userId: user.id }` is comparing Clerk ID against DB CUID — they NEVER match.
 
-### Current Code Structure
-- `components/coach/ClientSelector.tsx` - Component for coaches to search/add clients
-- `app/api/users/[userId]/students/route.ts` - GET returns coach's students, POST was just created to add students
-- `app/api/users/search/route.ts` - Search endpoint (needs to be enhanced)
+### ROLE CHAOS
+Three role systems, all out of sync:
 
-### Search API Location
-The search currently uses `/api/users/search?q=` which searches by email. Need to enhance to also search by name.
+1. `User.role` — "user", "coach" (manually set, rarely updated)
+2. `OrganizationMember.role` — "owner", "trainer", "coach" (correct, used for access)
+3. `Clerk publicMetadata.role` — supposed to sync, never did
+
+Result: UI checks one, backend checks another, nothing is consistent.
+
+## Option C: Standardize on Clerk IDs
+
+### Core Principle
+**Clerk ID is THE external identifier.** Clerk is the source of truth for auth. Use Clerk IDs everywhere externally, resolve to DB CUIDs only when needed for internal database operations.
+
+### Implementation Plan
+
+1. **Audit ALL places that use `user.id`**
+   - Every API route with `[userId]` param
+   - Every page that passes user ID in URL
+   - Every database query using `user.id`
+
+2. **Establish the pattern:**
+   ```
+   Clerk (user.id) → URL/API params → resolve via clerkId lookup → DB operations
+   ```
+
+3. **Create a utility function:**
+   ```typescript
+   // Resolves Clerk ID to DB User record
+   async function getUserByClerkId(clerkId: string) {
+     return db.user.findFirst({ where: { clerkId } })
+   }
+   
+   // Gets the DB CUID for the current authenticated user
+   async function getCurrentDbUser(clerkUserId: string) {
+     return db.user.findFirst({ where: { clerkId: clerkUserId } })
+   }
+   ```
+
+4. **Fix the role system:**
+   - ONE source of truth: `OrganizationMember.role` for access control
+   - `User.role` is decorative only (can keep for display)
+   - Remove `Clerk publicMetadata.role` checks from backend entirely
+   - Sync role changes through the OrganizationMember table
+
+5. **Files to audit (at minimum):**
+   - `lib/session.ts` — getCurrentUser() returns DB User with clerkId field
+   - `lib/api/workouts.ts` — uses user.id for queries
+   - `app/api/users/[userId]/*` — all routes
+   - `app/dashboard/workouts/[workoutId]/edit/page.tsx`
+   - `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
+   - `app/trainer/layout.tsx`
+   - `app/dashboard/layout.tsx`
+   - `components/workout/workout-edit-form.tsx`
+   - Any file doing `db.organizationMember.findFirst({ where: { userId: user.id }})`
+
+6. **Test comprehensively:**
+   - Sign in as bmp19076 (Coach Kevin) — verify all coach features work
+   - Sign in as kvnmiller11 (Client) — verify client features work
+   - Video selector appears for coach
+   - Client management works for coach
+   - No redirects to /dashboard
+
+## Quality Gates
+- CRITICAL issues: 0 allowed
+- HIGH issues: 0 allowed
+- MEDIUM issues: < 3 allowed
+- Keep looping until gates pass
 
 ## Success Criteria
-1. Coach can search for users by email OR name
-2. Coach can add a user as client without getting 403 Forbidden
-3. Added client appears in coach's student dashboard
-4. Works on both desktop and mobile viewports
-
-## Files Likely to Change
-- `components/coach/ClientSelector.tsx` - Fix API call, add name search
-- `app/api/users/search/route.ts` - Enhance to search by name in addition to email
-- `app/api/users/[userId]/students/route.ts` - Verify POST works correctly
-
-## Test Account
-- Email: thehivemindintelligence@gmail.com
-- Password: clawdaunt
-- Role: client in Habithletics Gym
-
-## Notes
-- The coach account is bmp19076@gmail.com (needs to sign in first)
-- The test client to add is kvnmiller11@gmail.com or thehivemindintelligence@gmail.com
+1. ALL API routes use Clerk ID as external identifier
+2. ALL database lookups resolve Clerk ID → DB CUID before querying
+3. OrganizationMember.role is THE source of truth for access control
+4. Coach Kevin can see all coach features (clients, programs, video selector)
+5. Client kvnmiller11 sees only client features
+6. No more "user.id vs clerkId" confusion anywhere in codebase

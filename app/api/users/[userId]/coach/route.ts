@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 // Get user's coach
 export async function GET(
@@ -15,14 +16,20 @@ export async function GET(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Only the user themselves can view their coach
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     const userWithCoach = await db.user.findUnique({
       where: {
-        id: params.userId,
+        id: targetDbUserId,
       },
       include: {
         coach: {
@@ -60,8 +67,14 @@ export async function PATCH(
       return user
     }
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // Only the user themselves can set their coach
-    if (user.id !== params.userId) {
+    if (user.id !== targetDbUserId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -71,7 +84,7 @@ export async function PATCH(
     if (coachId === null) {
       const updatedUser = await db.user.update({
         where: {
-          id: params.userId,
+          id: targetDbUserId,
         },
         data: {
           coachId: null,
@@ -95,7 +108,7 @@ export async function PATCH(
       return new NextResponse("Coach ID is required", { status: 400 })
     }
 
-    // Verify the coach exists and has the coach role
+    // Verify the coach exists and has the coach role (check OrganizationMember.role)
     // coachId here is the database ID from the coach selector
     const coach = await db.user.findUnique({
       where: {
@@ -107,14 +120,22 @@ export async function PATCH(
       return new NextResponse("Coach not found", { status: 404 })
     }
 
-    if (coach.role !== "coach") {
+    // Check OrganizationMember.role for coach access
+    const coachMembership = await db.organizationMember.findFirst({
+      where: {
+        userId: coachId,
+        role: { in: ["owner", "trainer", "coach"] },
+      },
+    })
+
+    if (!coachMembership) {
       return new NextResponse("User is not a coach", { status: 400 })
     }
 
     // Update the user's coach
     const updatedUser = await db.user.update({
       where: {
-        id: params.userId,
+        id: targetDbUserId,
       },
       data: {
         coachId: coachId,
@@ -137,4 +158,4 @@ export async function PATCH(
     console.error("[USER_COACH_PATCH]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

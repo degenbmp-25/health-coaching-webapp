@@ -24,15 +24,11 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     redirect("/signin")
   }
 
-  // Get fresh user data from database to ensure we have the latest role
-  const dbUser = await db.user.findFirst({
-    where: { clerkId: user.id },
-    select: { id: true, role: true }
+  // Check if user has coach access via OrganizationMember or User.role
+  const coachMembership = await db.organizationMember.findFirst({
+    where: { userId: user.id, role: { in: ["owner", "trainer", "coach"] } }
   })
-  const coachMembership = dbUser ? await db.organizationMember.findFirst({
-    where: { userId: dbUser.id, role: "coach" }
-  }) : null
-  if (!coachMembership && dbUser?.role !== "coach") {
+  if (!coachMembership && user.role !== "coach") {
     redirect("/dashboard")
   }
 
@@ -86,20 +82,12 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
   let organizationVideos: any[] = []
   let isTrainer = false
 
-  const membership = await db.organizationMember.findFirst({
-    where: {
-      userId: user.id,
-      role: { in: ['owner', 'trainer', 'coach'] }
-    },
-    include: { organization: true }
-  })
-
-  if (membership || dbUser?.role === 'coach') {
+  if (coachMembership || user.role === 'coach') {
     isTrainer = true
-    organizationVideos = membership
+    organizationVideos = coachMembership
       ? await db.organizationVideo.findMany({
           where: {
-            organizationId: membership.organizationId,
+            organizationId: coachMembership.organizationId,
             status: 'ready'
           },
           orderBy: { createdAt: 'desc' }

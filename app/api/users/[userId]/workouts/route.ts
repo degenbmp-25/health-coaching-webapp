@@ -3,11 +3,13 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 
 import { db } from "@/lib/db"
+import { resolveClerkIdToDbUserId } from "@/lib/api/id-utils"
 
 // Role constants to avoid magic strings
 const ROLE = {
   OWNER: "owner",
   TRAINER: "trainer",
+  COACH: "coach",
   CLIENT: "client",
 } as const
 
@@ -31,12 +33,12 @@ const workoutCreateSchema = z.object({
 // Shared authorization helper for GET and POST handlers
 async function authorizeWorkoutAccess(
   currentUserId: string,
-  targetUserId: string
+  targetDbUserId: string // Now takes DB user ID (CUID)
 ): Promise<{ authorized: boolean; targetMembership: { organizationId: string } | null }> {
   // If accessing own data, no org check needed
-  if (currentUserId === targetUserId) {
+  if (currentUserId === targetDbUserId) {
     const targetMembership = await db.organizationMember.findFirst({
-      where: { userId: targetUserId },
+      where: { userId: targetDbUserId },
       select: { organizationId: true },
     });
     return { authorized: true, targetMembership };
@@ -44,7 +46,7 @@ async function authorizeWorkoutAccess(
 
   // Get target user's organization membership
   const targetMembership = await db.organizationMember.findFirst({
-    where: { userId: targetUserId },
+    where: { userId: targetDbUserId },
     select: { organizationId: true },
   });
 
@@ -52,11 +54,11 @@ async function authorizeWorkoutAccess(
     return { authorized: false, targetMembership: null };
   }
 
-  // Check if current user is trainer/owner in the SAME org as target user
+  // Check if current user is trainer/owner/coach in the SAME org as target user
   const membership = await db.organizationMember.findFirst({
     where: {
       userId: currentUserId,
-      role: { in: [ROLE.OWNER, ROLE.TRAINER] },
+      role: { in: [ROLE.OWNER, ROLE.TRAINER, ROLE.COACH] },
       organizationId: targetMembership.organizationId,
     },
   });
@@ -81,10 +83,17 @@ export async function GET(
 
     console.log(`[USER_WORKOUTS_GET] Session user: ${currentUser.id}, role: ${currentUser.role}`)
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      console.log("[USER_WORKOUTS_GET] Target user not found")
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // HIGH #1 FIX: Reuse authorization result instead of fetching targetMembership twice
     const { authorized, targetMembership } = await authorizeWorkoutAccess(
       currentUser.id,
-      params.userId
+      targetDbUserId
     );
 
     if (!authorized) {
@@ -99,7 +108,7 @@ export async function GET(
     if (targetMembership) {
       // User is in an org — query via program assignments
       const programAssignments = await db.programAssignment.findMany({
-        where: { clientId: params.userId },
+        where: { clientId: targetDbUserId },
         select: { programId: true },
       });
 
@@ -108,7 +117,7 @@ export async function GET(
       // HIGH #4 FIX: If no program assignments, fall back to legacy userId query
       if (programIds.length === 0) {
         workouts = await db.workout.findMany({
-          where: { userId: params.userId },
+          where: { userId: targetDbUserId },
           include: {
             exercises: {
               include: {
@@ -148,7 +157,7 @@ export async function GET(
     } else {
       // Fallback to legacy userId query
       workouts = await db.workout.findMany({
-        where: { userId: params.userId },
+        where: { userId: targetDbUserId },
         include: {
           exercises: {
             include: {
@@ -170,7 +179,7 @@ export async function GET(
     return NextResponse.json(workouts)
   } catch (error) {
     console.error("[USER_WORKOUTS_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 })
   }
 }
 
@@ -184,10 +193,16 @@ export async function POST(
     if (authRes instanceof NextResponse) return authRes
     const currentUser = authRes
 
+    // Resolve params.userId (Clerk ID) to DB user ID
+    const targetDbUserId = await resolveClerkIdToDbUserId(params.userId)
+    if (!targetDbUserId) {
+      return new NextResponse("User not found", { status: 404 })
+    }
+
     // HIGH #1 FIX: Reuse authorization helper instead of duplicating logic
     const { authorized, targetMembership } = await authorizeWorkoutAccess(
       currentUser.id,
-      params.userId
+      targetDbUserId
     );
 
     if (!authorized) {
@@ -203,7 +218,7 @@ export async function POST(
       data: {
         name: body.name,
         description: body.description,
-        userId: params.userId,
+        userId: targetDbUserId,
         exercises: {
           create: body.exercises.map((exercise) => ({
             exerciseId: exercise.exerciseId,
