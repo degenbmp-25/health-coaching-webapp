@@ -9,12 +9,17 @@ export async function getClerkUserId(): Promise<string | null> {
 export async function getCurrentDbUser() {
   const clerkId = await getClerkUserId()
   if (!clerkId) return null
-  return db.user.findFirst({ where: { clerkId } })
+  return db.user.findUnique({ where: { clerkId } })
 }
 
 export async function resolveClerkIdToDbUserId(clerkId: string): Promise<string | null> {
-  const user = await db.user.findFirst({ where: { clerkId }, select: { id: true } })
-  return user?.id ?? null
+  try {
+    const user = await db.user.findFirst({ where: { clerkId }, select: { id: true } })
+    return user?.id ?? null
+  } catch (error) {
+    console.error("[resolveClerkIdToDbUserId]", error)
+    return null
+  }
 }
 
 export async function requireDbUser() {

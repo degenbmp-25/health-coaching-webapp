@@ -32,7 +32,8 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     redirect("/dashboard")
   }
 
-  // Get the student by Clerk ID and verify coach relationship
+  // URL params.studentId MUST be Clerk ID (external), not database CUID
+  // The lookup below uses clerkId to find the student
   const student = await db.user.findFirst({
     where: {
       clerkId: params.studentId,

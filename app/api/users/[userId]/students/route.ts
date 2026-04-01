@@ -89,21 +89,16 @@ export async function POST(
       return new NextResponse("Client ID is required", { status: 400 })
     }
 
-    // Verify the client exists
-    const client = await db.user.findUnique({
-      where: {
-        id: clientId,
-      },
-    })
-
-    if (!client) {
+    // Resolve clientId (Clerk ID) to database user ID
+    const clientDbUserId = await resolveClerkIdToDbUserId(clientId)
+    if (!clientDbUserId) {
       return new NextResponse("Client not found", { status: 404 })
     }
 
     // Set the client's coachId to this coach
     const updatedClient = await db.user.update({
       where: {
-        id: clientId,
+        id: clientDbUserId,
       },
       data: {
         coachId: user.id,

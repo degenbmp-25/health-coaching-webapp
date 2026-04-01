@@ -29,8 +29,16 @@ export async function GET(req: Request, { params }: UserGoalsParams) {
       },
     })
 
-    // Allow if user is viewing their own goals or is the coach
-    if (currentUser.id !== targetDbUserId && !student) {
+    // Also check org membership as fallback (allows trainers/owners to view any trainee goals)
+    const membership = await db.organizationMember.findFirst({
+      where: {
+        userId: currentUser.id,
+        role: { in: ["owner", "trainer", "coach"] },
+      },
+    })
+
+    // Allow if user is viewing their own goals, is the coach, or has org-level trainer access
+    if (currentUser.id !== targetDbUserId && !student && !membership) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
