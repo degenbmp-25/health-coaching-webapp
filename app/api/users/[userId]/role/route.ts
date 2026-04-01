@@ -16,7 +16,9 @@ export async function PATCH(
     }
 
     // Only users can change their own role
-    if (user.id !== params.userId) {
+    // params.userId is Clerk ID, user.id is DB ID - we allow self-update since requireAuth() validates identity
+    // For additional safety, verify the Clerk ID matches the authenticated user's Clerk ID
+    if (user.clerkId !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
@@ -28,16 +30,17 @@ export async function PATCH(
       })
     }
 
+    // Update using DB ID (user.id) - params.userId is Clerk ID
     const updatedUser = await db.user.update({
       where: {
-        id: params.userId,
+        id: user.id,
       },
       data: {
         role: role as string,
       },
     })
 
-    // Update Clerk user metadata to sync the role
+    // Update Clerk user metadata to sync the role - Clerk API expects Clerk ID
     const clerk = await clerkClient()
     await clerk.users.updateUserMetadata(params.userId, {
       publicMetadata: {

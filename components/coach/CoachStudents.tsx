@@ -28,17 +28,37 @@ export function CoachStudents({ userId }: CoachStudentsProps) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Store the database ID resolved from Clerk ID
+  const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
+
+  // Resolve Clerk ID to database ID on component mount
+  useEffect(() => {
+    const resolveDbId = async () => {
+      try {
+        const response = await fetch("/api/users/me")
+        if (response.ok) {
+          const userData = await response.json()
+          setCurrentUserDbId(userData.id)
+        }
+      } catch (err) {
+        console.error("Failed to resolve user DB ID:", err)
+      }
+    }
+    resolveDbId()
+  }, [])
 
   useEffect(() => {
     async function fetchStudents() {
+      if (!currentUserDbId) return
+
       try {
         setLoading(true)
-        const response = await fetch(`/api/users/${userId}/students`)
-        
+        const response = await fetch(`/api/users/${currentUserDbId}/students`)
+
         if (!response.ok) {
           throw new Error("Failed to fetch students")
         }
-        
+
         const data = await response.json()
         setStudents(data)
       } catch (err) {
@@ -49,7 +69,7 @@ export function CoachStudents({ userId }: CoachStudentsProps) {
     }
 
     fetchStudents()
-  }, [userId])
+  }, [currentUserDbId])
 
   if (loading) {
     return <div>Loading students...</div>

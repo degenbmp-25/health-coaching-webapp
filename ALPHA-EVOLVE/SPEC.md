@@ -1,79 +1,149 @@
-# Habithletics Alpha-Evolve - Loop 4 SPEC
+# SPEC.md — Coach Add Client Fix
 
-## Root Causes
+**Project:** habithletics-redesign-evolve
+**Date:** 2026-04-01
+**Alpha-Evolve Loop:** Coach Add Client Fix
+**Deployment:** https://habithletics-redesign-evolve-coral.vercel.app
 
-### Issue 1: "View" button doesn't navigate
+---
 
-**File:** `app/trainer/clients/page.tsx`
+## 1. Functionality Specification
 
-**Root Cause:** The "View →" button has NO `onClick` handler. It relies on click bubbling from the parent div's `onClick`. BUT the Button component (from shadcn/ui) internally uses an `<a>` tag or calls `e.stopPropagation()`, which breaks the bubbling.
+### Issue 1: "Add as Client" Returns 403 Forbidden (CRITICAL)
+
+**Root Cause:**
+- `ClientSelector` receives `coachId` which is the **Clerk ID** (from `useUser().id`)
+- It calls `POST /api/users/${coachId}/students` with the Clerk ID in the URL
+- The students route's `requireAuth()` returns a user object where `user.id` is the **internal database ID** (CUID)
+- The authorization check `user.id !== params.userId` compares DB ID vs Clerk ID → never matches → 403
+
+**Fix:**
+1. In `ClientSelector.addAsClient()`, first look up the current user's DB ID from `/api/users/me`
+2. Use the DB ID when calling the students endpoint
+3. Add a `role === "coach"` check in the students POST endpoint as a safeguard
+
+### Issue 2: Client Search Only Works by Email (HIGH — Already Fixed)
+
+**Status:** The search API (`/api/users/search/route.ts`) already supports both `name` and `email` via `OR` query with `mode: "insensitive"`. No code change needed here.
+
+**ClientSelector** calls `/api/users/search?query=${searchQuery}` which already works for name + email.
+
+---
+
+## 2. Technical Approach
+
+### File Changes
+
+#### A. `components/coach/ClientSelector.tsx`
+
+**Problem:** `coachId` prop is a Clerk ID, but the API expects DB ID.
+
+**Fix:** Add a helper function that resolves Clerk ID → DB ID before calling the add-client API.
 
 ```tsx
-// CURRENT (broken)
-<div onClick={() => router.push(`/trainer/clients/${client.id}`)}>
-  ...
-  <Button variant="ghost" size="sm">View →</Button>  {/* No onClick! */}
-</div>
+// In addAsClient():
+// 1. First get the current user's DB ID from /api/users/me
+// 2. Use that DB ID in the POST to /api/users/${dbId}/students
 ```
 
-**Fix:** Add explicit `onClick` to the button:
-```tsx
-<Button variant="ghost" size="sm" onClick={() => router.push(`/trainer/clients/${client.id}`)}>
-  View →
-</Button>
+#### B. `app/api/users/[userId]/students/route.ts`
+
+**Problem:** No role check; authorization could be improved.
+
+**Fix:** Add a coach role check in the POST handler:
+- `requireAuth()` ensures a valid authenticated user
+- Check `user.role === "coach"` before allowing student assignment
+- The existing `user.id !== params.userId` guard ensures a coach can only add students to themselves
+
+---
+
+## 3. File Structure
+
+```
+habithletics-redesign-evolve/
+├── components/
+│   └── coach/
+│       └── ClientSelector.tsx       ← FIX: Resolve DB ID before API call
+├── app/
+│   └── api/
+│       └── users/
+│           └── [userId]/
+│               └── students/
+│                   └── route.ts      ← FIX: Add coach role check
+└── ALPHA-EVOLVE/
+    └── SPEC.md                      ← This file
 ```
 
-### Issue 2: "habithletics gym" Badge is a dead link
+---
 
-**File:** `app/trainer/clients/page.tsx`
+## 4. Dependencies
 
-**Root Cause:** The Badge shows the organization name but is not clickable. It's just styled text.
+No new dependencies required. The codebase already has:
+- `db` (Prisma client) — already imported in routes
+- `requireAuth` from `@/lib/auth-utils` — already used in routes
+- Clerk `useUser()` hook — already used in ClientSelector
 
-```tsx
-// CURRENT - Badge is not clickable
-<Badge variant="outline">{client.organizationName}</Badge>
-```
+---
 
-**Fix Options:**
-1. Remove the clickable styling (cursor-default)
-2. Link to organization detail page if that exists
-3. Keep as-is but add cursor-pointer and tooltip explaining it's not clickable
+## 5. Migration Plan
 
-**Decision:** Make it plain text (not a Badge) since there's no meaningful destination.
+### Phase 1: Fix ClientSelector.tsx
+1. Add a state variable `currentUserDbId` to store the resolved DB ID
+2. On component mount, fetch `/api/users/me` to get the DB ID
+3. In `addAsClient()`, use `currentUserDbId` instead of `coachId` for the API call
 
-### Issue 3: Mobile nav disappears on detail pages
+### Phase 2: Fix students route
+1. In the POST handler, after `requireAuth()`, add:
+   ```ts
+   if (user.role !== "coach") {
+     return new NextResponse("Forbidden - Coach access required", { status: 403 })
+   }
+   ```
 
-**File:** `app/dashboard/layout.tsx`
+### Phase 3: Verification
+1. Sign in as coach (`bmp19076@gmail.com`)
+2. Navigate to `/dashboard/coaching`
+3. Search for a client by name or email
+4. Click "Add as Client"
+5. Verify 200 response and client appears in student dashboard
 
-**Root Cause:** The layout is a SERVER component that checks DB membership on each request. If:
-1. The API call to check membership fails
-2. Or the user isn't found in organization_members table
-3. Or there's a re-render issue
+---
 
-Then `canAccessTrainer` becomes `false` and the trainer nav section disappears.
+## 6. API Contract
 
-The mobile nav is conditionally rendered based on `canAccessTrainer`:
-```tsx
-const mobileLinks = canAccessTrainer 
-  ? [...dashboardLinks.data, ...trainerLinks.data]
-  : dashboardLinks.data
-```
+### GET `/api/users/me`
+**Response:** `{ id, clerkId, name, email, image, role, ... }`
 
-**Fix:** 
-1. Add error handling for the membership check
-2. Consider caching the trainer access state
-3. Or always show the trainer nav if user is authenticated (graceful degradation if no access)
+### POST `/api/users/[userId]/students`
+**Auth:** Requires authenticated user with `role === "coach"`
+**URL param:** `[userId]` = coach's internal database ID
+**Body:** `{ clientId: string }` — the client's internal database ID
+**Response:** `{ id, clerkId, name, email, image }` of updated client
+**Errors:**
+- 401 Unauthorized
+- 403 Forbidden (not a coach, or trying to modify another coach's students)
+- 404 Client not found
+- 400 Missing clientId
 
-## Files to Change
+### GET `/api/users/search?query=<q>`
+**Auth:** Requires authenticated user
+**Query params:** `query` (search string), optional `role` filter
+**Response:** Array of `{ id, name, email, image, role }` (max 10, excludes current user)
+**Search fields:** `name` OR `email` (case-insensitive, partial match)
 
-| File | Change |
-|------|--------|
-| `app/trainer/clients/page.tsx` | Add onClick to "View" button; change Badge to plain text |
-| `app/dashboard/layout.tsx` | Add try-catch around membership check; always show trainer nav for authenticated users |
+---
 
-## Success Criteria
+## 7. Test Accounts
 
-1. ✅ Clicking "View →" navigates to client detail page
-2. ✅ Organization name is not misleadingly styled as a link
-3. ✅ Navigation is always visible on all pages for authenticated trainers
-4. ✅ Mobile nav shows trainer section on trainer pages
+| Role  | Email                      | Password   | DB ID Known |
+|-------|---------------------------|------------|-------------|
+| Coach | bmp19076@gmail.com        | (use app)  | via /api/me |
+| Client| thehivemindintelligence@gmail.com | (use app) | via /api/me |
+
+---
+
+## 8. Out of Scope (No Changes Needed)
+
+- `app/api/users/search/route.ts` — already supports name + email search
+- `app/api/users/[userId]/coach/route.ts` — not involved in coach→client flow
+- `CoachSelector.tsx` — student selecting a coach (different flow)

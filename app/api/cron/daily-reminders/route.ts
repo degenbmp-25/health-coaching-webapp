@@ -17,9 +17,14 @@ const motivationalQuotes = [
 
 export async function GET(request: Request) {
   try {
-    // Verify cron secret if provided
+    // Verify cron secret if CRON_SECRET is configured
     const authHeader = request.headers.get('authorization')
-    if (env.CRON_SECRET && authHeader !== `Bearer ${env.CRON_SECRET}`) {
+    if (env.CRON_SECRET) {
+      if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } else {
+      // CRON_SECRET not configured - reject all requests to require proper external auth
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

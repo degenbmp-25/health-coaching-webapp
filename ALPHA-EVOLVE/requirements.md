@@ -1,50 +1,50 @@
-# Alpha-Evolve Loop 3 Requirements
+# Alpha-Evolve Requirements: Coach Add Client Fix
 
-## Problem Statement
-The trainer/client interface has two critical issues that prevent real-world use:
-1. Buttons throughout the app don't work (start workout, edit workout, etc.)
-2. Programs lack date/week functionality - advanced periodized training requires different workouts for different weeks
+**Codebase:** habithletics-redesign-evolve
+**Date:** 2026-04-01
+**Priority:** CRITICAL - blocker for going live
+**Deployment URL:** https://habithletics-redesign-evolve-coral.vercel.app
 
-## Current State
-- Programs contain multiple workouts but no week/day organization
-- All workouts appear flat without temporal structure
-- Interactive buttons (start, edit, etc.) are non-functional
+## Issues to Fix
 
-## Requirements
+### Issue 1: "Add as Client" Returns 403 Forbidden (CRITICAL)
+**Current behavior:** Coach clicks "Add as Client" button, gets "Forbidden" error
+**Root cause:** The ClientSelector component calls `/api/users/${userId}/coach` PATCH, but that endpoint only allows users to set their OWN coach, not for coaches to set clients.
 
-### 1. Functional Buttons
-- [ ] "Start Workout" button must launch workout view with exercise list
-- [ ] "Edit Workout" button must open edit mode
-- [ ] "Save" button must persist changes
-- [ ] All navigation buttons must work
-- [ ] Program management buttons must be functional
+**Expected behavior:** Coach should be able to search for users and add them as clients.
 
-### 2. Week/Periodization Support
-- [ ] Programs must support week-based organization
-- [ ] Each week can have different workouts assigned
-- [ ] Week 1 might be "Accumulation", Week 4 might be "Deload", etc.
-- [ ] Client sees workouts appropriate to their current week
-- [ ] Trainer can assign/move workouts across weeks
-- [ ] Week number should be configurable (start date + current week)
+### Issue 2: Client Search Only Works by Email (HIGH)
+**Current behavior:** ClientSelector only searches users by email address
+**Expected behavior:** Client search should find users by:
+- Email address (exact or partial match)
+- Name (exact or partial match)
 
-### 3. Data Model Changes
-- [ ] Add `weekNumber` field to workout assignments
-- [ ] Or create `ProgramWeek` model linking programs to ordered workout lists
-- [ ] Consider `startDate` on Program for calculating current week
+## Technical Context
 
-### 4. UI Changes
-- [ ] Workout list shows week groupings
-- [ ] Week selector/slider for navigating periodized programs
-- [ ] Visual indicator of current week
-- [ ] "This Week's Workout" prominent display
+### Current Code Structure
+- `components/coach/ClientSelector.tsx` - Component for coaches to search/add clients
+- `app/api/users/[userId]/students/route.ts` - GET returns coach's students, POST was just created to add students
+- `app/api/users/search/route.ts` - Search endpoint (needs to be enhanced)
+
+### Search API Location
+The search currently uses `/api/users/search?q=` which searches by email. Need to enhance to also search by name.
 
 ## Success Criteria
-- Trainer can create/edit periodized programs with weeks
-- Client sees correct workout for current week
-- All buttons are functional
-- No TypeScript errors
-- Production ready
+1. Coach can search for users by email OR name
+2. Coach can add a user as client without getting 403 Forbidden
+3. Added client appears in coach's student dashboard
+4. Works on both desktop and mobile viewports
 
-## Priority
-CRITICAL - Buttons must work for any real usage
-HIGH - Periodization is core functionality for advanced strength programs
+## Files Likely to Change
+- `components/coach/ClientSelector.tsx` - Fix API call, add name search
+- `app/api/users/search/route.ts` - Enhance to search by name in addition to email
+- `app/api/users/[userId]/students/route.ts` - Verify POST works correctly
+
+## Test Account
+- Email: thehivemindintelligence@gmail.com
+- Password: clawdaunt
+- Role: client in Habithletics Gym
+
+## Notes
+- The coach account is bmp19076@gmail.com (needs to sign in first)
+- The test client to add is kvnmiller11@gmail.com or thehivemindintelligence@gmail.com

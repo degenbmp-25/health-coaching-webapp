@@ -38,13 +38,31 @@ export default function CoachingPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
-  
+  // Store the current user's database ID (resolved from Clerk ID)
+  const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
+
+  // Resolve Clerk ID to database ID on component mount
+  useEffect(() => {
+    const resolveDbId = async () => {
+      try {
+        const response = await fetch("/api/users/me")
+        if (response.ok) {
+          const userData = await response.json()
+          setCurrentUserDbId(userData.id)
+        }
+      } catch (err) {
+        console.error("Failed to resolve user DB ID:", err)
+      }
+    }
+    resolveDbId()
+  }, [])
+
   const fetchStudents = useCallback(async () => {
-    if (!user?.id) return
-    
+    if (!currentUserDbId) return
+
     setIsLoadingStudents(true)
     try {
-      const response = await fetch(`/api/users/${user.id}/students`)
+      const response = await fetch(`/api/users/${currentUserDbId}/students`)
       if (response.ok) {
         const data = await response.json()
         setStudents(data)
@@ -54,7 +72,7 @@ export default function CoachingPage() {
     } finally {
       setIsLoadingStudents(false)
     }
-  }, [user?.id])
+  }, [currentUserDbId])
   
   useEffect(() => {
     if (user?.publicMetadata?.role === "coach") {
@@ -189,13 +207,13 @@ export default function CoachingPage() {
             <div className="space-y-6">
               {/* Add Client Selector */}
               <ClientSelector 
-                coachId={userId} 
+                coachId={currentUserDbId || userId} 
                 onClientAdded={fetchStudents}
               />
               
               {/* Student Data Dashboard */}
               <StudentDataDashboard 
-                coach={user}
+                coach={currentUserDbId}
                 students={students}
               />
               

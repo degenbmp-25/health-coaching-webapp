@@ -54,6 +54,11 @@ export async function POST(
       return user
     }
 
+    // Only coaches can add students
+    if (user.role !== "coach") {
+      return new NextResponse("Forbidden - Coach access required", { status: 403 })
+    }
+
     // Only the user themselves can add students to themselves
     if (user.id !== params.userId) {
       return new NextResponse("Forbidden", { status: 403 })
