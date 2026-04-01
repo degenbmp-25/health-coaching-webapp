@@ -19,18 +19,21 @@ export default async function DashboardLayout({
   let canAccessTrainer = false
   if (user) {
     try {
-      const membership = await db.organizationMember.findFirst({
+      // CRITICAL FIX: user.id from Clerk is Clerk ID (user_xxx), but OrgMember.userId is DB CUID
+      // Must resolve Clerk ID -> DB user first
+      const dbUser = await db.user.findFirst({
+        where: { clerkId: user.id },
+        select: { id: true, role: true }
+      })
+      
+      const membership = dbUser ? await db.organizationMember.findFirst({
         where: {
-          userId: user.id,
+          userId: dbUser.id,  // Use DB CUID
           role: { in: ["owner", "trainer", "coach"] },
         },
         select: { role: true },
-      })
-      // Also check User.role for coach access
-      const dbUser = await db.user.findUnique({
-        where: { id: user.id },
-        select: { role: true }
-      })
+      }) : null
+      
       canAccessTrainer = Boolean(membership) || dbUser?.role === 'coach'
     } catch (error) {
       console.error("Error checking trainer access:", error)

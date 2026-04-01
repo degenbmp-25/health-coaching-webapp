@@ -42,19 +42,20 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
   let organizationVideos: any[] = []
   let isTrainer = false
 
-  // Also check User.role === 'coach' since coaches manage workouts
-  const dbUser = await db.user.findUnique({
-    where: { id: user.id },
-    select: { role: true }
+  // CRITICAL FIX: user.id from Clerk is Clerk ID (user_xxx), but OrganizationMember.userId is DB CUID
+  // Must resolve Clerk ID -> DB user first, then use DB CUID for membership lookup
+  const dbUser = await db.user.findFirst({
+    where: { clerkId: user.id },
+    select: { id: true, role: true }
   })
 
-  const membership = await db.organizationMember.findFirst({
+  const membership = dbUser ? await db.organizationMember.findFirst({
     where: {
-      userId: user.id,
+      userId: dbUser.id,  // Use DB CUID, not Clerk ID
       role: { in: ['owner', 'trainer', 'coach'] }
     },
     include: { organization: true }
-  })
+  }) : null
 
   if (membership || dbUser?.role === 'coach') {
     isTrainer = true

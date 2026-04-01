@@ -25,9 +25,10 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
   }
 
   // Get fresh user data from database to ensure we have the latest role
-  const dbUser = await db.user.findUnique({
-    where: { id: user.id },
-    select: { role: true }
+  // CRITICAL FIX: user.id from Clerk is Clerk ID (user_xxx), must look up by clerkId
+  const dbUser = await db.user.findFirst({
+    where: { clerkId: user.id },
+    select: { id: true, role: true }
   })
 
   // Verify user is a coach using fresh database data
@@ -85,13 +86,15 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
   let organizationVideos: any[] = []
   let isTrainer = false
 
-  const membership = await db.organizationMember.findFirst({
+  // CRITICAL FIX: user.id from Clerk is Clerk ID (user_xxx), but OrgMember.userId is DB CUID
+  // Use dbUser.id which we already resolved via clerkId lookup
+  const membership = dbUser ? await db.organizationMember.findFirst({
     where: {
-      userId: user.id,
+      userId: dbUser.id,  // Use DB CUID
       role: { in: ['owner', 'trainer', 'coach'] }
     },
     include: { organization: true }
-  })
+  }) : null
 
   if (membership || dbUser?.role === 'coach') {
     isTrainer = true
