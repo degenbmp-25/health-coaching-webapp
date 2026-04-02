@@ -12,6 +12,9 @@ const routeContextSchema = z.object({
 const updateProgramSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  // Program date/duration tracking
+  startDate: z.string().datetime().optional().nullable(),
+  totalWeeks: z.number().int().min(1).max(52).optional().nullable(),
   // Atomic workout operations - add specific workouts (eliminates race condition)
   addWorkoutIds: z.array(z.string()).optional(),
   removeWorkoutIds: z.array(z.string()).optional(),
@@ -146,6 +149,8 @@ export async function PATCH(
       data: {
         ...(body.name && { name: body.name }),
         ...(body.description !== undefined && { description: body.description }),
+        ...(body.startDate !== undefined && { startDate: body.startDate ? new Date(body.startDate) : null }),
+        ...(body.totalWeeks !== undefined && { totalWeeks: body.totalWeeks }),
       },
       include: {
         workouts: {

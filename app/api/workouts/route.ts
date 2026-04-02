@@ -10,6 +10,7 @@ const workoutCreateSchema = z.object({
   description: z.string().optional(),
   weekNumber: z.number().int().min(1).optional().nullable(),
   dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  scheduledDate: z.string().datetime().optional().nullable(),
   exercises: z.array(
     z.object({
       exerciseId: z.string(),
@@ -142,6 +143,7 @@ export async function POST(req: Request) {
         description: body.description,
         weekNumber: body.weekNumber,
         dayOfWeek: body.dayOfWeek,
+        scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
         userId: user.id,
         ...(body.exercises && body.exercises.length > 0 && {
           exercises: {

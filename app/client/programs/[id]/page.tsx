@@ -15,6 +15,7 @@ interface Workout {
   description: string | null
   weekNumber: number | null
   dayOfWeek: number | null
+  scheduledDate: string | null
   exercises: Array<{
     id: string
     exercise: { id: string; name: string; category: string; muscleGroup: string | null }
@@ -31,10 +32,23 @@ interface GroupedWorkouts {
   [week: number]: Workout[]
 }
 
+interface ProgramData {
+  program: {
+    id: string
+    name: string
+    description: string | null
+    startDate: string | null
+    totalWeeks: number | null
+  }
+  workouts: Workout[]
+  groupedByWeek: GroupedWorkouts | null
+  currentWeek: number | null
+}
+
 export default function ClientProgramDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [user, setUser] = useState<any>(null)
-  const [program, setProgram] = useState<{ program: { id: string; name: string; description: string | null }; workouts: Workout[]; groupedByWeek: GroupedWorkouts | null } | null>(null)
+  const [program, setProgram] = useState<ProgramData | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null)
   const router = useRouter()
@@ -126,6 +140,33 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
         </Button>
       </DashboardHeader>
 
+      {/* Week X of Y Progress Banner */}
+      {program.currentWeek !== null && program.program.totalWeeks !== null && (
+        <Card className="mb-4 border-primary/50 bg-primary/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">
+                  {program.currentWeek > program.program.totalWeeks
+                    ? "Program Complete!"
+                    : `Currently Week ${program.currentWeek} of ${program.program.totalWeeks}`}
+                </p>
+                {program.program.startDate && (
+                  <p className="text-sm text-muted-foreground">
+                    Started {new Date(program.program.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                )}
+              </div>
+              {program.currentWeek <= program.program.totalWeeks && (
+                <Badge variant="outline" className="text-lg px-3 py-1">
+                  {program.currentWeek} / {program.program.totalWeeks}
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="mb-4">
         <CardHeader>
           <CardTitle>Progress</CardTitle>
@@ -182,8 +223,20 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
                 {workouts.map((workout: Workout, index: number) => {
                   // Find global index for display
                   const globalIndex = program.workouts.findIndex((w) => w.id === workout.id)
+                  // Calculate workout date
+                  let workoutDate: string | null = null
+                  if (workout.scheduledDate) {
+                    workoutDate = new Date(workout.scheduledDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  } else if (program.program.startDate && workout.weekNumber !== null) {
+                    const start = new Date(program.program.startDate)
+                    const daysToAdd = (workout.weekNumber - 1) * 7 + (workout.dayOfWeek ?? 0)
+                    const date = new Date(start.getTime() + daysToAdd * 24 * 60 * 60 * 1000)
+                    workoutDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  }
+                  // Check if this is today's workout
+                  const isToday = workoutDate === new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
                   return (
-                    <Card key={workout.id}>
+                    <Card key={workout.id} className={isToday ? "border-primary/50" : ""}>
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -195,16 +248,20 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
                               <CardDescription>
                                 {workout.exercises.length} exercises
                                 {workout.weekNumber !== null && ` • ${weekNames[workout.weekNumber]}`}
-                                {workout.dayOfWeek !== null && ` • ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][workout.dayOfWeek]}`}
+                                {workoutDate && ` • ${workoutDate}`}
+                                {!workoutDate && workout.dayOfWeek !== null && ` • ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][workout.dayOfWeek]}`}
                               </CardDescription>
                             </div>
                           </div>
-                          <Button
-                            variant={workout.isCompleted ? "outline" : "default"}
-                            onClick={() => startWorkout(workout.id)}
-                          >
-                            {workout.isCompleted ? "Redo" : "Start"}
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {isToday && <Badge variant="secondary">Today</Badge>}
+                            <Button
+                              variant={workout.isCompleted ? "outline" : "default"}
+                              onClick={() => startWorkout(workout.id)}
+                            >
+                              {workout.isCompleted ? "Redo" : "Start"}
+                            </Button>
+                          </div>
                         </div>
                       </CardHeader>
                       <CardContent>

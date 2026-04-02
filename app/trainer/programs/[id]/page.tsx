@@ -24,6 +24,8 @@ interface Workout {
   id: string
   name: string
   description: string | null
+  weekNumber: number | null
+  dayOfWeek: number | null
   exercises: Array<{
     id: string
     exercise: { id: string; name: string }
@@ -45,6 +47,8 @@ interface Program {
   id: string
   name: string
   description: string | null
+  startDate: string | null
+  totalWeeks: number | null
   organization: { id: string; name: string }
   createdBy: { id: string; name: string | null }
   workouts: Workout[]
@@ -75,6 +79,10 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   const [loadingWorkouts, setLoadingWorkouts] = useState(false)
   const [savingWorkouts, setSavingWorkouts] = useState(false)
   const [removingWorkoutId, setRemovingWorkoutId] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [startDate, setStartDate] = useState("")
+  const [totalWeeks, setTotalWeeks] = useState<number | "">("")
+  const [savingSettings, setSavingSettings] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -219,6 +227,47 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     setRemovingWorkoutId(null)
   }
 
+  function openSettingsDialog() {
+    if (program) {
+      // Format date for input (YYYY-MM-DD)
+      const dateValue = program.startDate
+        ? new Date(program.startDate).toISOString().split("T")[0]
+        : ""
+      setStartDate(dateValue)
+      setTotalWeeks(program.totalWeeks ?? "")
+      setSettingsOpen(true)
+    }
+  }
+
+  async function saveSettings() {
+    if (!program) return
+
+    setSavingSettings(true)
+
+    const res = await fetch(`/api/programs/${program.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startDate: startDate ? new Date(startDate).toISOString() : null,
+        totalWeeks: totalWeeks !== "" ? Number(totalWeeks) : null,
+      }),
+    })
+
+    if (res.ok) {
+      const updated = await res.json()
+      setProgram({
+        ...program,
+        startDate: updated.startDate,
+        totalWeeks: updated.totalWeeks,
+      })
+      toast({ title: "Program settings saved" })
+      setSettingsOpen(false)
+    } else {
+      toast({ title: "Failed to save settings", variant: "destructive" })
+    }
+    setSavingSettings(false)
+  }
+
   if (loading || !program) {
     return (
       <Shell>
@@ -230,9 +279,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   return (
     <Shell>
       <DashboardHeader heading={program.name} text={program.organization.name}>
-        <Button variant="outline" onClick={() => router.push("/trainer/programs")}>
-          ← Back
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openSettingsDialog}>
+            ⚙ Settings
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/trainer/programs")}>
+            ← Back
+          </Button>
+        </div>
       </DashboardHeader>
 
       {program.description && (
@@ -268,6 +322,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">{index + 1}</Badge>
                         <h3 className="font-medium">{workout.name}</h3>
+                        {workout.weekNumber !== null && (
+                          <Badge variant="secondary">Week {workout.weekNumber}</Badge>
+                        )}
+                        {workout.dayOfWeek !== null && (
+                          <Badge variant="outline">
+                            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][workout.dayOfWeek]}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">
@@ -404,6 +466,56 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
               disabled={selectedWorkoutIds.length === 0 || savingWorkouts}
             >
               {savingWorkouts ? "Saving..." : `Add ${selectedWorkoutIds.length} Workout${selectedWorkoutIds.length !== 1 ? 's' : ''}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Program Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Program Settings</DialogTitle>
+            <DialogDescription>
+              Set the program start date and duration for scheduling workouts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                placeholder="Select start date"
+              />
+              <p className="text-sm text-muted-foreground">
+                When the program begins. Leave empty if not yet scheduled.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="totalWeeks">Total Weeks</Label>
+              <Input
+                id="totalWeeks"
+                type="number"
+                min={1}
+                max={52}
+                value={totalWeeks}
+                onChange={(e) => setTotalWeeks(e.target.value ? Number(e.target.value) : "")}
+                placeholder="e.g., 8"
+              />
+              <p className="text-sm text-muted-foreground">
+                Program duration in weeks (1-52). Leave empty to auto-calculate from workouts.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSettingsOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveSettings} disabled={savingSettings}>
+              {savingSettings ? "Saving..." : "Save Settings"}
             </Button>
           </div>
         </DialogContent>

@@ -2,6 +2,7 @@ import { z } from "zod"
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/session"
 import { db } from "@/lib/db"
+import { calculateCurrentWeek } from "@/lib/program-utils"
 
 const routeContextSchema = z.object({
   params: z.object({
@@ -116,14 +117,20 @@ export async function GET(
       }
     }
 
+    // Calculate current week based on startDate
+    const currentWeek = calculateCurrentWeek(program.startDate, program.totalWeeks)
+
     return NextResponse.json({
       program: {
         id: program.id,
         name: program.name,
         description: program.description,
+        startDate: program.startDate?.toISOString() ?? null,
+        totalWeeks: program.totalWeeks,
       },
       workouts: workoutsWithStatus,
       groupedByWeek: groupedWorkouts,
+      currentWeek,
     })
   } catch (error) {
     console.error("Error fetching program workouts:", error)

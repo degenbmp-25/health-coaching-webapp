@@ -1,481 +1,213 @@
-# SPEC.md - Option C: Clerk ID Standardization
+# SPEC.md — Variable-Week Program Support
 
-## Executive Summary
-
-The codebase suffers from an **IDENTITY CRISIS** where Clerk IDs and Database CUIDs are mixed inconsistently across API routes, frontend pages, and authorization checks. This document specifies the complete fix.
+**Project:** habithletics-redesign-evolve  
+**Generated:** 2026-04-01  
+**Phase:** Architect (alpha-evolve loop)
 
 ---
 
-## Part 1: The Problem
+## 1. Functionality Specification
 
-### 1.1 ID Identity Crisis
+### 1.1 Program Date/Duration Tracking
 
-**Three conflicting identity systems:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `startDate` | `DateTime?` | No | When the program begins. Used to calculate workout dates. |
+| `totalWeeks` | `Int?` | No | Program duration in weeks (1–52). Defaults to inferred max from workouts. |
 
-| Source | Field | Example Value |
-|--------|-------|---------------|
-| Clerk Auth | `user.id` (Clerk's) | `user_30i7HVsu07CLHiXWSnDQv1BmVKz` |
-| Database `User` table | `User.id` | `cmnc6zhqe00006k3h9gg2pm2c` |
-| Database `User` table | `User.clerkId` | `user_30i7HVsu07CLHiXWSnDQv1BmVKz` |
+**Behavior:**
+- Programs without `startDate` still work — date calculations are skipped
+- Programs without `totalWeeks` infer duration from highest `weekNumber` in workouts
+- Trainers can set both fields on the program detail page
 
-**The `getCurrentUser()` function returns a DB User record where:**
-- `user.id` = CUID (internal database ID)
-- `user.clerkId` = Clerk ID (external identifier)
+### 1.2 Workout Scheduling
 
-### 1.2 Where `user.id` is Used (Correctly vs Incorrectly)
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scheduledDate` | `DateTime?` | No | Explicit date for this workout. Overrides calculated date. |
+| `weekNumber` | `Int?` | No | Which week (1–52). Already exists, must be assignable by trainers. |
+| `dayOfWeek` | `Int?` | No | Day within week (0=Sun to 6=Sat). Already exists. |
 
-**CORRECT uses (CUID used for DB operations):**
-- `app/dashboard/workouts/[workoutId]/edit/page.tsx:53` - `userId: user.id` → correct CUID
-- `app/trainer/layout.tsx:23` - `userId: user.id` → correct CUID
-- `app/api/workout-sessions/route.ts:55` - `userId: user.id` → correct CUID
+**Date Calculation Logic:**
+```
+If scheduledDate exists → use it directly
+Else if startDate exists → startDate + ((weekNumber - 1) * 7) + dayOfWeek days
+Else → show "Unscheduled"
+```
 
-**INCORRECT/BUGGY uses:**
-- `app/api/users/[userId]/activities/route.ts:24,71` - `organizationId: params.userId` → BUG: treats user ID as organization ID
-- `app/api/users/[userId]/dashboard/route.ts:36` - `organizationId: params.userId` → BUG: same issue
-- `app/api/users/[userId]/workouts/route.ts` - `params.userId` used directly without clerkId resolution in some paths
+### 1.3 Client-Facing Features
 
-### 1.3 API Routes: Mixed Conventions for `params.userId`
+- **"Week X of Y" Progress Banner:** Calculated from `startDate` + today's date vs `totalWeeks`
+- **Workout Grouping:** Grouped by `weekNumber`, sorted ascending
+- **Workout Dates:** Display calculated date (or explicit `scheduledDate`)
+- **Week Navigation:** Filter/view by specific week
 
-**Routes that CORRECTLY look up by Clerk ID first:**
-| File | Pattern |
+### 1.4 Trainer/Coach Features
+
+- **Program Settings:** Edit `startDate` and `totalWeeks` on program detail page
+- **Week Assignment:** Dropdown when adding/editing workouts to assign `weekNumber`
+- **Week Filtering:** Filter workouts by week on program detail
+- **Bulk Week Assignment:** When importing from spreadsheet, preserve week mapping
+
+---
+
+## 2. Technical Approach
+
+### 2.1 Data Model Changes (Prisma)
+
+```prisma
+model Program {
+  // ... existing fields ...
+  startDate   DateTime?  // NEW: Program start date
+  totalWeeks  Int?       // NEW: Duration in weeks (1-52)
+  
+  workouts    Workout[]
+}
+
+model Workout {
+  // ... existing fields ...
+  scheduledDate DateTime?  // NEW: Optional explicit date override
+  weekNumber    Int?       // Already exists: 1-52
+  dayOfWeek     Int?       // Already exists: 0-6
+}
+```
+
+### 2.2 API Changes
+
+#### `PATCH /api/programs/[id]`
+**Add support for:**
+```typescript
+{
+  startDate?: string  // ISO date string
+  totalWeeks?: number // 1-52
+}
+```
+
+#### `GET /api/workouts/program/[programId]`
+**Response enhancement:**
+```typescript
+{
+  program: {
+    id: string
+    name: string
+    description: string | null
+    startDate: string | null   // NEW
+    totalWeeks: number | null  // NEW
+  },
+  workouts: Workout[],
+  groupedByWeek: Record<number, Workout[]>,
+  // NEW: Current week calculation
+  currentWeek: number | null   // Based on today's date vs startDate
+}
+```
+
+#### `PATCH /api/workouts/[workoutId]`
+**Add support for:**
+```typescript
+{
+  // ... existing fields ...
+  scheduledDate?: string  // ISO date string
+}
+```
+
+#### `POST /api/programs/[id]/workouts` (new route)
+**Create workout within a program with week assignment:**
+```typescript
+{
+  name: string
+  description?: string
+  weekNumber: number       // Required for program workouts (1-52)
+  dayOfWeek?: number       // 0-6
+  scheduledDate?: string   // Optional override
+  exercises: ExerciseInput[]
+}
+```
+
+### 2.3 Frontend Changes
+
+#### Trainer Program Detail (`/trainer/programs/[id]`)
+1. Add "Program Settings" section with:
+   - Start Date picker (`<input type="date">`)
+   - Total Weeks selector (1-52 dropdown)
+2. Show `weekNumber` badge on each workout in the list
+3. Add week filter tabs above workout list
+4. When adding workouts, include week assignment dropdown
+
+#### Client Program Detail (`/client/programs/[id]`)
+1. Add "Week X of Y" progress banner at top (calculated from `startDate`)
+2. Show calculated workout dates alongside week info
+3. Display "Today" highlight if current week matches
+4. Week filter tabs (already partially implemented)
+
+#### Workout Edit/Create (`/dashboard/workouts/[workoutId]/edit`, `/dashboard/workouts/new`)
+1. Add Week Number dropdown (1-52)
+2. Add Day of Week dropdown (Sun-Sat)
+3. Add Scheduled Date picker (optional override)
+
+---
+
+## 3. File Structure
+
+### Files to CREATE:
+```
+app/api/programs/[id]/workouts/route.ts   # Create workout in program with week assignment
+```
+
+### Files to MODIFY:
+
+| File | Changes |
 |------|---------|
-| `app/api/users/[userId]/goals/route.ts:20` | `db.user.findUnique({ where: { clerkId: params.userId } })` |
-| `app/api/users/[userId]/meals/route.ts:30,112` | `db.user.findUnique({ where: { clerkId: params.userId } })` |
-| `app/api/users/[userId]/role/route.ts:21` | `user.clerkId !== params.userId` |
-| `app/api/users/[userId]/workouts/[workoutId]/route.ts:20` | `db.user.findUnique({ where: { clerkId: params.userId } })` |
+| `prisma/schema.prisma` | Add `startDate`, `totalWeeks` to Program; `scheduledDate` to Workout |
+| `app/api/programs/[id]/route.ts` (PATCH) | Handle `startDate`, `totalWeeks` updates |
+| `app/api/workouts/program/[programId]/route.ts` | Include new fields in response, calculate currentWeek |
+| `app/api/workouts/[workoutId]/route.ts` | Handle `scheduledDate` in PATCH |
+| `app/api/workouts/route.ts` | Handle `scheduledDate` in POST |
+| `app/trainer/programs/[id]/page.tsx` | Add program settings form, show week badges |
+| `app/client/programs/[id]/page.tsx` | Add "Week X of Y" banner, show dates |
+| `app/dashboard/workouts/[workoutId]/edit/page.tsx` | Add week/day/scheduledDate fields |
+| `app/dashboard/workouts/new/page.tsx` | Add week/day fields |
 
-**Routes that INCORRECTLY use `params.userId` directly as DB CUID:**
-| File | Issue |
-|------|-------|
-| `app/api/users/[userId]/students/route.ts:19,63` | `user.id !== params.userId` - compares CUID to Clerk ID (never matches when viewing own data) |
-| `app/api/users/[userId]/coach/route.ts:19,64` | `user.id !== params.userId` - same issue |
-| `app/api/users/[userId]/activities/route.ts:24,71` | `organizationId: params.userId` - BUG: treats user Clerk ID as organization ID |
-| `app/api/users/[userId]/dashboard/route.ts:36` | `organizationId: params.userId` - BUG: same issue |
-| `app/api/users/[userId]/workouts/route.ts` | `params.userId` used in `programAssignment` and `workout` queries without clerkId resolution |
-
-### 1.4 Role System Chaos
-
-**Three competing role systems:**
-
-| System | Field | Values | Used By |
-|--------|-------|-------|---------|
-| `User.role` | `User.role` | `"user"`, `"coach"` | `requireCoach()`, various API routes |
-| `OrganizationMember.role` | `OrganizationMember.role` | `"owner"`, `"trainer"`, `"client"` | Most API authorization checks |
-| `Clerk publicMetadata.role` | `user.publicMetadata?.role` | `"user"`, `"coach"` | Frontend pages only |
-
-**Access control checks that use the WRONG system:**
-
-| File | Check | Issue |
-|------|-------|-------|
-| `app/api/users/[userId]/students/route.ts:58` | `user.role !== "coach"` | Should check `OrganizationMember.role` |
-| `app/api/users/[userId]/coach/route.ts:110` | `coach.role !== "coach"` | Should check `OrganizationMember.role` |
-| `app/dashboard/coaching/page.tsx:78,95` | `user.publicMetadata?.role` | Frontend-only check, not enforced server-side |
-| `app/dashboard/coaching/students/[studentId]/activities/[activityId]/settings/page.tsx:59` | `currentUser.role !== "coach"` | Should check `OrganizationMember` |
-| `lib/auth-utils.ts:38` | `user.role !== "coach"` | `requireCoach()` uses `User.role`, not `OrganizationMember.role` |
-| `lib/api/activities.ts:86` | `user.role === "coach"` | Uses `User.role` instead of `OrganizationMember` |
-
----
-
-## Part 2: The Solution
-
-### 2.1 Core Principle
-
-> **Clerk ID is THE external identifier.** Use Clerk IDs everywhere externally (URLs, API params). Resolve to DB CUID only when needed for internal database operations.
-
-### 2.2 Standardization Convention
-
-**URLs and API params:** ALWAYS use Clerk ID
+### Utility Functions to CREATE:
 ```
-/api/users/user_xxx/workouts     ✓ CORRECT
-/api/users/cmncxxx/workouts       ✗ WRONG
-```
-
-**Database operations:** Use DB CUID via clerkId resolution
-```typescript
-// Every API route MUST resolve params.userId (Clerk ID) to DB User first
-const targetUser = await db.user.findUnique({
-  where: { clerkId: params.userId }
-})
-if (!targetUser) return NextResponse("User not found", { status: 404 })
-
-// Then use targetUser.id (CUID) for all subsequent DB operations
-```
-
-### 2.3 Utility Functions to Create
-
-Create `lib/api/id-utils.ts`:
-
-```typescript
-import { db } from "@/lib/db"
-
-/**
- * Resolve Clerk ID to DB User record.
- * Use when you have a Clerk ID from URL params or auth context.
- */
-export async function resolveClerkIdToUser(clerkId: string) {
-  return await db.user.findUnique({
-    where: { clerkId },
-    select: { id: true, clerkId: true, role: true, name: true, email: true }
-  })
-}
-
-/**
- * Resolve Clerk ID to DB User CUID only.
- * Use when you just need the internal ID for database queries.
- */
-export async function resolveClerkIdToCuid(clerkId: string): Promise<string | null> {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    select: { id: true }
-  })
-  return user?.id ?? null
-}
-
-/**
- * Get OrganizationMember for a user within an organization.
- * This is THE way to check user roles for access control.
- */
-export async function getUserOrgMembership(
-  userId: string, // DB CUID
-  organizationId: string
-) {
-  return await db.organizationMember.findFirst({
-    where: { userId, organizationId },
-    select: { id: true, role: true, organizationId: true }
-  })
-}
-
-/**
- * Get all OrganizationMemberships for a user (across all orgs).
- */
-export async function getUserMemberships(userId: string) {
-  return await db.organizationMember.findMany({
-    where: { userId },
-    select: { organizationId: true, role: true }
-  })
-}
-
-/**
- * Check if user has coach/trainer/owner role in ANY organization.
- * This replaces checks on User.role === "coach"
- */
-export async function isCoach(userId: string): Promise<boolean> {
-  const membership = await db.organizationMember.findFirst({
-    where: {
-      userId,
-      role: { in: ["owner", "trainer", "coach"] }
-    }
-  })
-  return membership !== null
-}
-
-/**
- * Validate that the requesting user can access the target user's data.
- * Returns the resolved target user or null if access denied.
- */
-export async function validateUserAccess(
-  requestingUserId: string, // DB CUID of authenticated user
-  targetClerkId: string     // Clerk ID from URL param
-): Promise<{ authorized: boolean; targetUser?: Awaited<ReturnType<typeof resolveClerkIdToUser>> }> {
-  // Resolve target Clerk ID to DB user
-  const targetUser = await resolveClerkIdToUser(targetClerkId)
-  if (!targetUser) {
-    return { authorized: false }
-  }
-
-  // Self-access is always allowed
-  if (requestingUserId === targetUser.id) {
-    return { authorized: true, targetUser }
-  }
-
-  // Check if requesting user is coach of target user
-  const student = await db.user.findFirst({
-    where: { id: targetUser.id, coachId: requestingUserId }
-  })
-  if (student) {
-    return { authorized: true, targetUser }
-  }
-
-  // Check org membership - if same org and trainer/owner, allow access
-  const requestingMemberships = await getUserMemberships(requestingUserId)
-  const targetMemberships = await getUserMemberships(targetUser.id)
-
-  for (const reqMem of requestingMemberships) {
-    if (reqMem.role === "owner" || reqMem.role === "trainer") {
-      // Check if target user is in same organization
-      const inSameOrg = targetMemberships.some(
-        tm => tm.organizationId === reqMem.organizationId
-      )
-      if (inSameOrg) {
-        return { authorized: true, targetUser }
-      }
-    }
-  }
-
-  return { authorized: false }
-}
-```
-
-### 2.4 Role System Fix
-
-**ONE source of truth: `OrganizationMember.role`**
-
-| Context | Check | Replacement |
-|---------|-------|------------|
-| Coach access for multi-tenant | `User.role === "coach"` | `OrganizationMember.role in ["owner", "trainer", "coach"]` |
-| Trainer/Owner access | `User.role` | `OrganizationMember.role in ["owner", "trainer"]` |
-| Backend role checks | `user.role` from `requireAuth()` | New `requireOrgRole(["owner", "trainer"])` utility |
-| Frontend role display | `user.publicMetadata?.role` | N/A (decorative only) |
-| `Clerk publicMetadata.role` | Used in webhooks | Keep for Clerk-side reference, NOT for backend access control |
-
-**New auth utility `lib/auth-utils.ts` additions:**
-
-```typescript
-/**
- * Require user to have specific organization role(s).
- * Must be called after requireAuth().
- */
-export async function requireOrgRole(roles: string | string[]) {
-  const user = await requireAuth()
-  if (user instanceof NextResponse) return user
-
-  const roleArray = Array.isArray(roles) ? roles : [roles]
-
-  // Get user's organization memberships
-  const memberships = await db.organizationMember.findMany({
-    where: { userId: user.id },
-    select: { role: true }
-  })
-
-  const hasRole = memberships.some(m => roleArray.includes(m.role))
-
-  if (!hasRole) {
-    return new NextResponse("Forbidden - Insufficient organization role", { status: 403 })
-  }
-
-  return user
-}
-
-/**
- * Check if user is a coach (owner/trainer/coach in any org).
- * Use for UI decisions, not access control.
- */
-export async function isCoachUser(userId: string): Promise<boolean> {
-  const membership = await db.organizationMember.findFirst({
-    where: {
-      userId,
-      role: { in: ["owner", "trainer", "coach"] }
-    }
-  })
-  return membership !== null
-}
+lib/program-utils.ts
+  - calculateCurrentWeek(startDate, totalWeeks): number | null
+  - calculateWorkoutDate(program, workout): Date | null
+  - formatWeekDisplay(weekNumber, totalWeeks): string  // "Week 3 of 8"
 ```
 
 ---
 
-## Part 3: Complete File Audit
+## 4. Migration Plan
 
-### 3.1 API Routes - Files Requiring Changes
-
-#### `app/api/users/[userId]/route.ts`
-**Problem:** Compares `params.userId` (Clerk ID) with `user.id` (CUID) on line 28
-```typescript
-// CURRENT (BUGGY):
-if (params.userId === user.id) {
-```
-**Fix:** Resolve Clerk ID first
-```typescript
-// FIXED:
-const targetUser = await db.user.findUnique({
-  where: { clerkId: params.userId }
-})
-if (!targetUser) return new NextResponse("User not found", { status: 404 })
-if (targetUser.id === user.id) { ... }
+### Step 1: Prisma Migration
+```bash
+npx prisma migrate dev --name add_program_weeks_and_scheduled_date
 ```
 
-#### `app/api/users/[userId]/activities/route.ts`
-**Problem:** Uses `organizationId: params.userId` (BUG - treats user ID as org ID)
-**Lines 24, 71:** `organizationId: params.userId` → WRONG
-**Fix:** Remove the buggy org check, use proper authorization pattern
+### Step 2: API Updates (in order)
+1. Update `PATCH /api/programs/[id]` — add `startDate`, `totalWeeks`
+2. Update `app/api/workouts/route.ts` POST — add `scheduledDate`
+3. Update `app/api/workouts/[workoutId]/route.ts` PATCH — add `scheduledDate`
+4. Update `app/api/workouts/program/[programId]/route.ts` GET — include new fields, calculate `currentWeek`
+5. Create `app/api/programs/[id]/workouts/route.ts` POST
 
-#### `app/api/users/[userId]/dashboard/route.ts`
-**Problem:** Same bug as activities route - `organizationId: params.userId`
-**Line 36:** `organizationId: params.userId` → WRONG
-**Fix:** Use `validateUserAccess()` utility
+### Step 3: Frontend Updates (in order)
+1. Add `lib/program-utils.ts` utilities
+2. Update trainer program detail page (settings + week badges)
+3. Update client program detail page ("Week X of Y" + dates)
+4. Update workout edit/create forms
 
-#### `app/api/users/[userId]/students/route.ts`
-**Problem:** Compares Clerk ID with CUID
-**Line 19, 63:** `user.id !== params.userId` → BUG (never matches when self-accessing)
-**Fix:** Use `validateUserAccess()` utility or resolve clerkId first
-
-#### `app/api/users/[userId]/coach/route.ts`
-**Problem:** Uses `user.id !== params.userId` comparison then queries by `id: params.userId`
-**Lines 19, 64:** `user.id !== params.userId` → BUG
-**Lines 25, 74, 117:** `id: params.userId` → Wrong (should look up by clerkId)
-**Fix:** Resolve clerkId first, then compare CUIDs
-
-#### `app/api/users/[userId]/workouts/route.ts`
-**Problem:** Uses `params.userId` directly in `authorizeWorkoutAccess()` without clerkId resolution
-**Lines 82, 87, 102, 111, 151, 190, 206:** `params.userId` passed to `authorizeWorkoutAccess`
-**Fix:** Resolve clerkId before calling `authorizeWorkoutAccess`
-
-#### `app/api/users/[userId]/workouts/[workoutId]/route.ts`
-**Problem:** Line 32 compares CUID with Clerk ID
-```typescript
-if (currentUser.id === params.userId) {  // BUG: compares CUID to Clerk ID
-```
-**Fix:** Resolve clerkId first
-
-#### `app/api/users/[userId]/goals/route.ts`
-**Problem:** Line 40 compares Clerk ID with CUID
-```typescript
-if (params.userId !== currentUser.id && !student) {  // BUG
-```
-**Fix:** Compare resolved targetUser.id with currentUser.id
-
-#### `app/api/users/[userId]/meals/route.ts`
-**Problem:** Line 46 compares Clerk ID with CUID
-```typescript
-if (currentUser.id === params.userId) {  // BUG
-```
-**Fix:** Compare resolved targetUser.id with currentUser.id
-
-### 3.2 Frontend Pages - Files Requiring Changes
-
-#### `app/dashboard/coaching/page.tsx`
-**Problem:** Inconsistent ID resolution
-- `currentUserDbId` resolved via `/api/users/me` (DB CUID)
-- `students[].id` is DB CUID from `/api/users/${currentUserDbId}/students`
-- But later passes `userId` (Clerk ID from `useUser()`) to components
-**Lines to audit:** 63, 92-110 (student fetch and data passing)
-
-#### `app/dashboard/coaching/students/[studentId]/workouts/page.tsx`
-**Problem:** `params.studentId` used directly - needs verification of ID format
-**Line 69:** `fetch('/api/users/${params.studentId}/workouts')` - assumes DB CUID
-**Fix:** If studentId is Clerk ID, no change needed (goals/meals routes look up by clerkId). If DB CUID, needs clerkId lookup first.
-
-#### `app/dashboard/coaching/students/[studentId]/goals/page.tsx`
-**Problem:** `params.studentId` in URL - API expects Clerk ID (route does `clerkId: params.userId`)
-**Lines 67, 75, 92, 110, 129, 161:** Uses `params.studentId`
-**Status:** Should work IF `params.studentId` is Clerk ID (route looks up by clerkId)
-
-#### `components/coach/StudentDataDashboard.tsx`
-**Problem:** Uses `selectedStudent.clerkId` for API calls - THIS IS CORRECT
-**Lines 117-135:** Uses `selectedStudent.clerkId` for meals, workouts, activities, dashboard
-**Status:** This component is correct - it uses Clerk ID consistently
-
-#### `components/coach/ClientSelector.tsx`
-**Problem:** `coachId` prop is Clerk ID but used as DB CUID internally
-**Lines 74-77:** Resolves DB CUID via `/api/users/me` but `coachId` prop is Clerk ID
-**Line 91:** `currentUserDbId` (CUID) used in `/api/users/${currentUserDbId}/students`
-
-### 3.3 Library Files - Files Requiring Changes
-
-#### `lib/auth-utils.ts`
-**Problem:** `requireCoach()` uses `User.role`, not `OrganizationMember.role`
-**Line 38:** `if (user.role !== "coach")` → WRONG source of truth
-**Fix:** Add `requireOrgRole()` and deprecate `requireCoach()`
-
-#### `lib/api/activities.ts`
-**Problem:** `verifyActivity()` uses `user.role === "coach"`, line 86
-**Line 86:** `if (user.role === "coach")` → Should check `OrganizationMember`
-**Fix:** Use `isCoach()` utility
-
-### 3.4 Dashboard Layouts - Files Requiring Changes
-
-#### `app/dashboard/layout.tsx`
-**Problem:** Line 31 `where: { id: user.id }` is correct (user.id is CUID)
-BUT: Lines 22-34 check `organizationMember.findFirst({ userId: user.id })` which is correct
-**Status:** This file appears correct
-
-#### `app/trainer/layout.tsx`
-**Problem:** Line 30 `where: { id: user.id }` is correct
-**Status:** This file appears correct
-
-#### `app/dashboard/workouts/[workoutId]/edit/page.tsx`
-**Problem:** Line 47 `getWorkout(params.workoutId, user.id)` passes user.id (CUID) - correct
-BUT: Line 53 `userId: user.id` used in `organizationMember.findFirst` - correct
-**Status:** This file appears correct
-
-#### `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
-**Problem:** Line 32 queries `organizationMember.findFirst({ userId: dbUser.id })` but `dbUser` was found via `clerkId: user.id`
-**Lines 35, 89:** `dbUser.id` vs `user.id` confusion
-**Status:** Needs audit - may be correct but confusing naming
+### Step 4: Testing
+- Verify programs without `startDate` still work
+- Verify existing workouts with `null` weekNumber remain accessible
+- Test date calculations with various startDate configurations
 
 ---
 
-## Part 4: Migration Plan
+## 5. Constraints & Backwards Compatibility
 
-### Phase 1: Create Utilities (Day 1)
-1. Create `lib/api/id-utils.ts` with clerk ID resolution functions
-2. Update `lib/auth-utils.ts` with `requireOrgRole()` and deprecate `requireCoach()`
-3. Test utilities in isolation
-
-### Phase 2: Fix API Routes (Day 1-2)
-1. Fix `app/api/users/[userId]/activities/route.ts` - REMOVE buggy `organizationId` checks
-2. Fix `app/api/users/[userId]/dashboard/route.ts` - Same fix
-3. Fix all other `app/api/users/[userId]/*.ts` routes to resolve clerkId first
-4. Update `lib/api/activities.ts` to use `isCoach()` utility
-
-### Phase 3: Fix Role Checks (Day 2)
-1. Replace `User.role === "coach"` checks with `OrganizationMember.role` checks
-2. Update `lib/auth-utils.ts` `requireCoach()` to check `OrganizationMember`
-3. Audit all files for `user.role` checks
-
-### Phase 4: Frontend Consistency (Day 2-3)
-1. Audit `components/coach/ClientSelector.tsx` for ID confusion
-2. Verify all pages use consistent ID format (Clerk ID in URLs)
-3. Update `app/dashboard/coaching/page.tsx` if needed
-
-### Phase 5: Testing (Day 3)
-1. Test as bmp19076 (Coach Kevin) - verify all coach features
-2. Test as kvnmiller11 (Client) - verify client features
-3. Verify video selector appears for coach
-4. Verify client management works for coach
-5. Verify no redirects to /dashboard
-
----
-
-## Part 5: Files Summary Table
-
-| File | Status | Priority | Change Required |
-|------|--------|----------|-----------------|
-| `lib/api/id-utils.ts` | NEW | CRITICAL | Create with clerkId resolution utilities |
-| `lib/auth-utils.ts` | MODIFY | CRITICAL | Add `requireOrgRole()`, deprecate `requireCoach()` |
-| `app/api/users/[userId]/activities/route.ts` | BUGGY | CRITICAL | Remove buggy `organizationId` checks, use proper auth |
-| `app/api/users/[userId]/dashboard/route.ts` | BUGGY | CRITICAL | Same fix as activities |
-| `app/api/users/[userId]/route.ts` | BUGGY | HIGH | Resolve clerkId before comparison |
-| `app/api/users/[userId]/students/route.ts` | BUGGY | HIGH | Use `validateUserAccess()` |
-| `app/api/users/[userId]/coach/route.ts` | BUGGY | HIGH | Resolve clerkId, fix comparisons |
-| `app/api/users/[userId]/workouts/route.ts` | BUGGY | HIGH | Resolve clerkId before `authorizeWorkoutAccess()` |
-| `app/api/users/[userId]/workouts/[workoutId]/route.ts` | BUGGY | HIGH | Fix CUID vs Clerk ID comparison |
-| `app/api/users/[userId]/goals/route.ts` | BUGGY | MEDIUM | Fix comparison |
-| `app/api/users/[userId]/meals/route.ts` | BUGGY | MEDIUM | Fix comparison |
-| `lib/api/activities.ts` | BUGGY | HIGH | Use `isCoach()` instead of `User.role` |
-| `components/coach/ClientSelector.tsx` | CONFUSING | MEDIUM | Clarify ID handling |
-| `app/dashboard/coaching/page.tsx` | CONFUSING | MEDIUM | Audit ID consistency |
-| `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx` | CONFUSING | LOW | Rename variables for clarity |
-| `app/dashboard/layout.tsx` | OK | - | No change needed |
-| `app/trainer/layout.tsx` | OK | - | No change needed |
-| `app/dashboard/workouts/[workoutId]/edit/page.tsx` | OK | - | No change needed |
-
----
-
-## Part 6: Quality Gates
-
-- **CRITICAL issues:** 0 allowed (API auth bugs, data corruption risks)
-- **HIGH issues:** 0 allowed (broken features, wrong data returned)
-- **MEDIUM issues:** < 3 allowed (inconsistent patterns, confusing code)
-- Keep looping until gates pass
-
-## Success Criteria
-
-1. ✅ ALL API routes use Clerk ID as external identifier in URLs
-2. ✅ ALL database lookups resolve Clerk ID → DB CUID before querying
-3. ✅ `OrganizationMember.role` is THE source of truth for access control
-4. ✅ Coach Kevin (bmp19076) can see all coach features
-5. ✅ Client kvnmiller11 sees only client features
-6. ✅ No more "user.id vs clerkId" confusion
-7. ✅ Video selector appears for coach
-8. ✅ Client management works for coach
-9. ✅ No redirects to /dashboard for authorized users
+- **Null-safe:** All new fields are optional (`?`) — no breaking changes
+- **Existing workouts:** Those with `weekNumber: null` render as "Unassigned"
+- **No startDate:** When `startDate` is null, skip date calculations, show "Date TBD"
+- **Auth unchanged:** All existing authorization checks preserved
+- **No spreadsheet re-import needed:** Week data already exists in imported workouts

@@ -146,6 +146,9 @@ model Workout {
   weekNumber Int?     @map("week_number")    // Which week of the program this workout belongs to (1, 2, 3...)
   dayOfWeek  Int?     @map("day_of_week")    // Day within the week (0=Sun, 1=Mon, ..., 6=Sat)
 
+  // Scheduling
+  scheduledDate DateTime? @map("scheduled_date")  // Optional explicit date override
+
   @@map(name: "workouts")
 }
 
@@ -341,6 +344,10 @@ model Program {
   createdById    String   @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Program date/duration tracking
+  startDate   DateTime?  @map("start_date")    // When the program begins
+  totalWeeks  Int?       @map("total_weeks")   // Duration in weeks (1-52)
 
   // Relations
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)

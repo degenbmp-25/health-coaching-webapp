@@ -1,95 +1,105 @@
-# Alpha-Evolve Requirements: Option C - Clerk ID Standardization
+# Requirements: Weeks/Date Support for Workout Programs
 
-## Project
-Habithletics - Health Coaching Webapp
+**Codebase:** /home/magic_000/BeastmodeVault/vault/projects/habithletics-redesign-evolve
+**Deployment URL:** https://habithletics-redesign-evolve-coral.vercel.app
+**Started:** 2026-04-01 20:33 EDT
 
-## Context
-We've been patching the same Clerk ID vs DB CUID mismatch bug repeatedly. Each fix introduces new bugs. The foundation is cracked.
+## Problem Statement
 
-## The Problem
+Currently, the program structure assumes a fixed number of weeks (e.g., 5 weeks from the imported spreadsheet). But real-world programs have VARIABLE lengths:
 
-### IDENTITY CRISIS
-The system has THREE conflicting identity systems:
+- Some programs are 4 weeks
+- Some are 8 weeks
+- Some are 12 weeks
+- Some programs repeat cycles
+- Different clients have different program lengths
 
-1. **Clerk Auth** provides `user.id` = Clerk ID format (`user_xxx`)
-2. **Database User table** has `User.id` = internal CUID (`cmncxxx`)
-3. **Database User.clerkId** = Clerk ID (stored for reference)
+## Current State
 
-Every API route that does `where: { userId: user.id }` is comparing Clerk ID against DB CUID — they NEVER match.
+- Workouts have `weekNumber` and `dayOfWeek` fields (added in previous loops)
+- The imported program has 5 weeks of data (all set to weekNumber=1)
+- Programs are not tracking their total duration or start date
 
-### ROLE CHAOS
-Three role systems, all out of sync:
+## Requirements
 
-1. `User.role` — "user", "coach" (manually set, rarely updated)
-2. `OrganizationMember.role` — "owner", "trainer", "coach" (correct, used for access)
-3. `Clerk publicMetadata.role` — supposed to sync, never did
+### 1. Program Date/Duration Tracking
+- Add `startDate` (optional Date) to Program model
+- Add `totalWeeks` (optional Int) to Program model  
+- Programs should display their duration (e.g., "5 weeks" or "8-week program")
 
-Result: UI checks one, backend checks another, nothing is consistent.
+### 2. Workout Week Assignment
+- Allow assigning workouts to specific week numbers (1, 2, 3, etc.)
+- Week numbers should be relative to program start date
+- Support programs with 1-52 weeks
 
-## Option C: Standardize on Clerk IDs
+### 3. Workout Display
+- Show which week each workout belongs to
+- Show workout date (calculated from program start date + week/day)
+- Sort workouts by week number, then day of week
 
-### Core Principle
-**Clerk ID is THE external identifier.** Clerk is the source of truth for auth. Use Clerk IDs everywhere externally, resolve to DB CUIDs only when needed for internal database operations.
+### 4. Trainer/Coach UI
+- Allow trainers to set program duration (total weeks)
+- Allow trainers to set program start date
+- Allow trainers to assign workouts to specific weeks
+- Allow filtering/viewing workouts by week
 
-### Implementation Plan
+### 5. Client UI
+- Show clients which week they're currently on (based on date)
+- Show progress through program (Week 3 of 8, etc.)
+- Display workout dates relative to program start
 
-1. **Audit ALL places that use `user.id`**
-   - Every API route with `[userId]` param
-   - Every page that passes user ID in URL
-   - Every database query using `user.id`
+## Technical Approach
 
-2. **Establish the pattern:**
-   ```
-   Clerk (user.id) → URL/API params → resolve via clerkId lookup → DB operations
-   ```
+### Database Changes
+```prisma
+model Program {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime?  // When the program starts
+  totalWeeks  Int?        // Total duration in weeks
+  trainerId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  assignments ProgramAssignment[]
+  workouts    Workout[]
+}
 
-3. **Create a utility function:**
-   ```typescript
-   // Resolves Clerk ID to DB User record
-   async function getUserByClerkId(clerkId: string) {
-     return db.user.findFirst({ where: { clerkId } })
-   }
-   
-   // Gets the DB CUID for the current authenticated user
-   async function getCurrentDbUser(clerkUserId: string) {
-     return db.user.findFirst({ where: { clerkId: clerkUserId } })
-   }
-   ```
+model Workout {
+  // Existing fields...
+  weekNumber  Int?       // Which week (1, 2, 3, etc.)
+  dayOfWeek   Int?       // Day within week (1-7)
+  scheduledDate DateTime? // Optional explicit date
+  
+  programId   String
+  program     Program @relation(fields: [programId], references: [id])
+}
+```
 
-4. **Fix the role system:**
-   - ONE source of truth: `OrganizationMember.role` for access control
-   - `User.role` is decorative only (can keep for display)
-   - Remove `Clerk publicMetadata.role` checks from backend entirely
-   - Sync role changes through the OrganizationMember table
+### API Changes
+- `GET /api/programs/[id]` - Include `totalWeeks`, `startDate`
+- `PATCH /api/programs/[id]` - Allow updating `totalWeeks`, `startDate`
+- `GET /api/programs/[id]/workouts` - Include weekNumber, sort by week/day
+- `POST /api/programs/[id]/workouts` - Allow setting weekNumber, dayOfWeek
+- `PATCH /api/workouts/[workoutId]` - Allow updating weekNumber, dayOfWeek
 
-5. **Files to audit (at minimum):**
-   - `lib/session.ts` — getCurrentUser() returns DB User with clerkId field
-   - `lib/api/workouts.ts` — uses user.id for queries
-   - `app/api/users/[userId]/*` — all routes
-   - `app/dashboard/workouts/[workoutId]/edit/page.tsx`
-   - `app/dashboard/coaching/students/[studentId]/workouts/[workoutId]/edit/page.tsx`
-   - `app/trainer/layout.tsx`
-   - `app/dashboard/layout.tsx`
-   - `components/workout/workout-edit-form.tsx`
-   - Any file doing `db.organizationMember.findFirst({ where: { userId: user.id }})`
+### Frontend Changes
+- Program detail page: Show/edit duration and start date
+- Workout list: Group by week, show week headers
+- Workout edit: Week/day selector dropdowns
+- Client dashboard: Show "Week X of Y" progress indicator
 
-6. **Test comprehensively:**
-   - Sign in as bmp19076 (Coach Kevin) — verify all coach features work
-   - Sign in as kvnmiller11 (Client) — verify client features work
-   - Video selector appears for coach
-   - Client management works for coach
-   - No redirects to /dashboard
+## Constraints
+- Don't break existing functionality
+- Programs without startDate should still work (just no date calculation)
+- Existing workouts with null weekNumber should remain accessible
+- Must work with Clerk auth and multi-tenant organization model
 
-## Quality Gates
-- CRITICAL issues: 0 allowed
-- HIGH issues: 0 allowed
-- MEDIUM issues: < 3 allowed
-- Keep looping until gates pass
-
-## Success Criteria
-1. ALL API routes use Clerk ID as external identifier
-2. ALL database lookups resolve Clerk ID → DB CUID before querying
-3. OrganizationMember.role is THE source of truth for access control
-4. Coach Kevin can see all coach features (clients, programs, video selector)
-5. Client kvnmiller11 sees only client features
-6. No more "user.id vs clerkId" confusion anywhere in codebase
+## Acceptance Criteria
+1. Trainer can set program duration (totalWeeks)
+2. Trainer can set program start date
+3. Trainer can assign workouts to specific weeks
+4. Workout list shows workouts grouped by week number
+5. Client sees "Week X of Y" progress indicator
+6. No breaking changes to existing features
