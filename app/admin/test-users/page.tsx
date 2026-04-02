@@ -86,8 +86,8 @@ export default function AdminTestUsersPage() {
   return (
     <Shell>
       <DashboardHeader
-        title="Test User Management"
-        description="Create test users for the Habithletics app"
+        heading="Test User Management"
+        text="Create test users for the Habithletics app"
       />
       
       <div className="grid gap-6">
