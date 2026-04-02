@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Settings } from "lucide-react"
 
 interface Workout {
   id: string
@@ -281,7 +282,8 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       <DashboardHeader heading={program.name} text={program.organization.name}>
         <div className="flex gap-2">
           <Button variant="outline" onClick={openSettingsDialog}>
-            ⚙ Settings
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
           </Button>
           <Button variant="outline" onClick={() => router.push("/trainer/programs")}>
             ← Back
