@@ -25,7 +25,8 @@ const workoutPatchSchema = z.object({
       weight: z.number().optional(),
       notes: z.string().optional(),
       order: z.number(),
-      muxPlaybackId: z.string().optional().nullable(),
+      // Use organizationVideoId to correctly reference the video
+      organizationVideoId: z.string().optional().nullable(),
     })
   ),
 })
@@ -77,6 +78,19 @@ export async function PATCH(
     }
 
     // Build update data, filtering out undefined values
+    // If organizationVideoId is provided, look up the correct muxPlaybackId from organization_videos
+    // First, collect all organizationVideoIds to batch fetch
+    const orgVideoIds = body.exercises
+      .map(e => e.organizationVideoId)
+      .filter((id): id is string => id != null);
+    
+    // Batch fetch organization videos to get their muxPlaybackIds
+    const orgVideos = await db.organizationVideo.findMany({
+      where: { id: { in: orgVideoIds } },
+      select: { id: true, muxPlaybackId: true },
+    });
+    const orgVideoMap = new Map(orgVideos.map(v => [v.id, v.muxPlaybackId]));
+    
     const updateData: Record<string, any> = {
       name: body.name,
       description: body.description,
@@ -84,15 +98,23 @@ export async function PATCH(
       dayOfWeek: body.dayOfWeek,
       exercises: {
         deleteMany: {},
-        create: body.exercises.map((exercise) => ({
-          exerciseId: exercise.exerciseId,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          weight: exercise.weight,
-          notes: exercise.notes,
-          order: exercise.order,
-          muxPlaybackId: exercise.muxPlaybackId,
-        })),
+        create: body.exercises.map((exercise) => {
+          // Get muxPlaybackId from organization video if organizationVideoId is set
+          const muxPlaybackId = exercise.organizationVideoId 
+            ? orgVideoMap.get(exercise.organizationVideoId) || null
+            : null;
+          
+          return {
+            exerciseId: exercise.exerciseId,
+            sets: exercise.sets,
+            reps: exercise.reps,
+            weight: exercise.weight,
+            notes: exercise.notes,
+            order: exercise.order,
+            organizationVideoId: exercise.organizationVideoId,
+            muxPlaybackId,
+          };
+        }),
       },
     }
 

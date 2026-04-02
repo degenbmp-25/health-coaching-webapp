@@ -47,7 +47,8 @@ const workoutFormSchema = z.object({
       reps: z.coerce.number().min(1),
       weight: z.coerce.number().optional(),
       notes: z.string().optional(),
-      muxPlaybackId: z.string().optional().nullable(),
+      // Store organizationVideoId to always get correct muxPlaybackId from organization_videos
+      organizationVideoId: z.string().optional().nullable(),
     })
   ),
 })
@@ -123,7 +124,8 @@ export function WorkoutEditForm({
         reps: exercise.reps,
         weight: exercise.weight || undefined,
         notes: exercise.notes || undefined,
-        muxPlaybackId: exercise.muxPlaybackId || undefined,
+        // Store organizationVideoId for correct video reference
+        organizationVideoId: (exercise as any).organizationVideoId || undefined,
       })) || [],
     },
   })
@@ -169,7 +171,8 @@ export function WorkoutEditForm({
             weight: exercise.weight,
             notes: exercise.notes,
             order: index,
-            muxPlaybackId: exercise.muxPlaybackId || null,
+            // Send organizationVideoId to correctly reference the video
+            organizationVideoId: exercise.organizationVideoId || null,
           })),
         }),
       })
@@ -317,7 +320,7 @@ export function WorkoutEditForm({
                   reps: 10,
                   weight: undefined,
                   notes: "",
-                  muxPlaybackId: undefined,
+                  organizationVideoId: undefined,
                 })
               }
             >
@@ -447,7 +450,7 @@ export function WorkoutEditForm({
                   {isTrainer && (
                     <FormField
                       control={form.control}
-                      name={`exercises.${index}.muxPlaybackId`}
+                      name={`exercises.${index}.organizationVideoId`}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Video</FormLabel>
@@ -465,7 +468,7 @@ export function WorkoutEditForm({
                               {readyVideos.map((video) => (
                                 <SelectItem 
                                   key={video.id} 
-                                  value={video.muxPlaybackId ?? video.id}
+                                  value={video.id}
                                 >
                                   {video.title}
                                 </SelectItem>

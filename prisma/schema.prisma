@@ -181,8 +181,9 @@ model WorkoutExercise {
   duration   Int?     // Duration in seconds
   notes      String?
   videoUrl   String?  @map("video_url")
-  muxPlaybackId String? @map("mux_playback_id") // Mux streaming playback ID
+  muxPlaybackId String? @map("mux_playback_id") // Mux streaming playback ID (deprecated - use organizationVideoId)
   muxAssetId    String? @map("mux_asset_id")    // Mux asset ID for management
+  organizationVideoId String? @map("organization_video_id") // FK to organization_videos for correct playback ID lookup
   order      Int
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -190,6 +191,7 @@ model WorkoutExercise {
   workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id])
   setLogs  SetLog[]
+  organizationVideo OrganizationVideo? @relation(fields: [organizationVideoId], references: [id])
 
   @@map(name: "workout_exercises")
 }
@@ -313,6 +315,7 @@ model OrganizationVideo {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workoutExercises WorkoutExercise[]
 
   @@map("organization_videos")
 }

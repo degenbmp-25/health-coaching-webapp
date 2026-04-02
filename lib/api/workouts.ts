@@ -26,7 +26,7 @@ export async function getUserWorkouts(userId: string) {
       where: { userId },
       include: {
         exercises: {
-          include: { exercise: true },
+          include: { exercise: true, organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } } },
           orderBy: { order: "asc" },
         },
       },
@@ -55,7 +55,7 @@ export async function getUserWorkouts(userId: string) {
         where: { userId },
         include: {
           exercises: {
-            include: { exercise: true },
+            include: { exercise: true, organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } } },
             orderBy: { order: "asc" },
           },
           user: { select: { id: true, name: true } },
@@ -70,7 +70,7 @@ export async function getUserWorkouts(userId: string) {
       },
       include: {
         exercises: {
-          include: { exercise: true },
+          include: { exercise: true, organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } } },
           orderBy: { order: "asc" },
         },
         user: { select: { id: true, name: true } },
@@ -95,7 +95,7 @@ export async function getUserWorkouts(userId: string) {
     },
     include: {
       exercises: {
-        include: { exercise: true },
+        include: { exercise: true, organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } } },
         orderBy: { order: "asc" },
       },
       user: { select: { id: true, name: true } },
@@ -132,6 +132,7 @@ export async function getStudentWorkouts(studentId: string, coachId: string) {
       exercises: {
         include: {
           exercise: true,
+          organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } },
         },
         orderBy: {
           order: "asc",
@@ -167,6 +168,7 @@ export async function getWorkout(workoutId: string, authorizedUserId: string) {
       exercises: {
         include: {
           exercise: true,
+          organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } },
         },
         orderBy: {
           order: "asc",
@@ -199,6 +201,7 @@ export async function getWorkout(workoutId: string, authorizedUserId: string) {
           exercises: {
             include: {
               exercise: true,
+              organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } },
             },
             orderBy: {
               order: "asc",
@@ -234,6 +237,7 @@ export async function getWorkout(workoutId: string, authorizedUserId: string) {
             exercises: {
               include: {
                 exercise: true,
+                organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } },
               },
               orderBy: {
                 order: "asc",
@@ -270,6 +274,7 @@ export async function getStudentWorkout(workoutId: string, studentId: string, co
       exercises: {
         include: {
           exercise: true,
+          organizationVideo: { select: { id: true, muxPlaybackId: true, title: true } },
         },
         orderBy: {
           order: "asc",

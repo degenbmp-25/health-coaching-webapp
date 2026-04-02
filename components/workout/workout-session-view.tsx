@@ -25,6 +25,11 @@ const VideoPlayer = dynamic(
 
 interface WorkoutExerciseWithExercise extends WorkoutExercise {
   exercise: Exercise
+  organizationVideo?: {
+    id: string
+    muxPlaybackId: string | null
+    title: string
+  } | null
 }
 
 interface WorkoutWithExercises extends Workout {
@@ -352,7 +357,12 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                   </div>
 
                   {/* Video Section */}
-                  {we.muxPlaybackId ? (
+                  {/* Use organizationVideo.muxPlaybackId if available, otherwise fall back to we.muxPlaybackId */}
+                  {we.organizationVideo?.muxPlaybackId ? (
+                    <div className="mb-4">
+                      <VideoPlayer playbackId={we.organizationVideo.muxPlaybackId} title={we.organizationVideo?.title || we.exercise?.name} />
+                    </div>
+                  ) : we.muxPlaybackId ? (
                     <div className="mb-4">
                       <VideoPlayer playbackId={we.muxPlaybackId} title={we.exercise?.name} />
                     </div>
