@@ -74,6 +74,8 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
     id: workout.id,
     name: workout.name,
     description: workout.description,
+    weekNumber: workout.weekNumber,
+    dayOfWeek: workout.dayOfWeek,
     exercises: workout.exercises.map(we => ({
       id: we.exerciseId,
       name: we.exercise.name,

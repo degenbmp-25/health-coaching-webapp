@@ -38,6 +38,8 @@ const workoutFormSchema = z.object({
     message: "Workout name must be at least 3 characters.",
   }),
   description: z.string().optional(),
+  weekNumber: z.number().int().min(1).max(52).optional().nullable(),
+  dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
   exercises: z.array(
     z.object({
       exerciseId: z.string(),
@@ -77,6 +79,8 @@ interface WorkoutEditFormProps {
     id: string
     name: string
     description: string | null
+    weekNumber?: number | null
+    dayOfWeek?: number | null
     exercises?: {
       id: string
       name: string
@@ -111,6 +115,8 @@ export function WorkoutEditForm({
     defaultValues: {
       name: workout.name,
       description: workout.description || "",
+      weekNumber: workout.weekNumber ?? undefined,
+      dayOfWeek: workout.dayOfWeek ?? undefined,
       exercises: workout.exercises?.map(exercise => ({
         exerciseId: exercise.id,
         sets: exercise.sets,
@@ -154,6 +160,8 @@ export function WorkoutEditForm({
         body: JSON.stringify({
           name: data.name,
           description: data.description,
+          weekNumber: data.weekNumber,
+          dayOfWeek: data.dayOfWeek,
           exercises: data.exercises.map((exercise, index) => ({
             exerciseId: exercise.exerciseId,
             sets: exercise.sets,
@@ -237,6 +245,62 @@ export function WorkoutEditForm({
               </FormItem>
             )}
           />
+
+          {/* Scheduling: Week and Day selectors */}
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="weekNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Week Number</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
+                    value={field.value === null || field.value === undefined ? "none" : String(field.value)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {Array.from({ length: 52 }, (_, i) => i + 1).map(w => (
+                        <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="dayOfWeek"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Day of Week</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
+                    value={field.value === null || field.value === undefined ? "none" : String(field.value)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                        <SelectItem key={i} value={String(i)}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </div>
 
         <div className="space-y-4">

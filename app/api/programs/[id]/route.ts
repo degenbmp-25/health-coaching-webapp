@@ -16,7 +16,16 @@ const updateProgramSchema = z.object({
   startDate: z.string().datetime().optional().nullable(),
   totalWeeks: z.number().int().min(1).max(52).optional().nullable(),
   // Atomic workout operations - add specific workouts (eliminates race condition)
+  // Simple mode: all workouts get the same week/day
   addWorkoutIds: z.array(z.string()).optional(),
+  addWorkoutWeek: z.number().int().min(1).max(52).optional().nullable(),
+  addWorkoutDay: z.number().int().min(0).max(6).optional().nullable(),
+  // Detailed mode: each workout gets its own week/day
+  addWorkouts: z.array(z.object({
+    id: z.string(),
+    weekNumber: z.number().int().min(1).max(52).optional().nullable(),
+    dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  })).optional(),
   removeWorkoutIds: z.array(z.string()).optional(),
 })
 
@@ -130,10 +139,29 @@ export async function PATCH(
     const body = updateProgramSchema.parse(json)
 
     // Atomically add/remove workouts (no read-then-write race condition)
+    // Detailed mode: addWorkouts array with per-workout week/day
+    if (body.addWorkouts && body.addWorkouts.length > 0) {
+      await Promise.all(body.addWorkouts.map(w =>
+        db.workout.update({
+          where: { id: w.id },
+          data: {
+            programId: params.id,
+            weekNumber: w.weekNumber ?? null,
+            dayOfWeek: w.dayOfWeek ?? null,
+          },
+        })
+      ))
+    }
+
+    // Simple mode: addWorkoutIds with shared week/day for all
     if (body.addWorkoutIds && body.addWorkoutIds.length > 0) {
       await db.workout.updateMany({
         where: { id: { in: body.addWorkoutIds } },
-        data: { programId: params.id },
+        data: {
+          programId: params.id,
+          ...(body.addWorkoutWeek !== undefined && { weekNumber: body.addWorkoutWeek }),
+          ...(body.addWorkoutDay !== undefined && { dayOfWeek: body.addWorkoutDay }),
+        },
       })
     }
 

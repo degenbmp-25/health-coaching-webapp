@@ -264,10 +264,16 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
                               {workout.isCompleted ? "✓" : globalIndex + 1}
                             </Badge>
                             <div>
-                              <CardTitle className="text-base">{workout.name}</CardTitle>
+                              <div className="flex items-center gap-2">
+                                <CardTitle className="text-base">{workout.name}</CardTitle>
+                                {workout.weekNumber !== null && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Week {workout.weekNumber}
+                                  </Badge>
+                                )}
+                              </div>
                               <CardDescription>
                                 {workout.exercises.length} exercises
-                                {workout.weekNumber !== null && ` • ${weekNames[workout.weekNumber]}`}
                                 {workoutDate && ` • ${workoutDate}`}
                                 {!workoutDate && workout.dayOfWeek !== null && ` • ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][workout.dayOfWeek]}`}
                               </CardDescription>

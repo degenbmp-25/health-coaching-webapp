@@ -19,6 +19,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Settings } from "lucide-react"
 
 interface Workout {
@@ -84,6 +91,15 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   const [startDate, setStartDate] = useState("")
   const [totalWeeks, setTotalWeeks] = useState<number | "">("")
   const [savingSettings, setSavingSettings] = useState(false)
+  // Add workouts dialog - week/day assignment
+  const [addWorkoutWeek, setAddWorkoutWeek] = useState<number | null>(null)
+  const [addWorkoutDay, setAddWorkoutDay] = useState<number | null>(null)
+  // Edit workout week dialog
+  const [editWeekOpen, setEditWeekOpen] = useState(false)
+  const [editWeekWorkout, setEditWeekWorkout] = useState<Workout | null>(null)
+  const [editWeek, setEditWeek] = useState<number | null>(null)
+  const [editDay, setEditDay] = useState<number | null>(null)
+  const [savingWeek, setSavingWeek] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -155,6 +171,8 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   async function openAddWorkoutsDialog() {
     setLoadingWorkouts(true)
     setSelectedWorkoutIds([])
+    setAddWorkoutWeek(null)
+    setAddWorkoutDay(null)
     
     // Fetch all workouts available to this trainer
     const res = await fetch("/api/workouts")
@@ -182,11 +200,17 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     
     setSavingWorkouts(true)
     
-    // Use atomic add operation - no read-then-write race condition
+    // Build addWorkouts array with week/day for each selected workout
+    const addWorkouts = selectedWorkoutIds.map(wId => ({
+      id: wId,
+      weekNumber: addWorkoutWeek,
+      dayOfWeek: addWorkoutDay,
+    }))
+    
     const res = await fetch(`/api/programs/${program.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addWorkoutIds: selectedWorkoutIds }),
+      body: JSON.stringify({ addWorkouts }),
     })
     
     if (res.ok) {
@@ -226,6 +250,50 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       toast({ title: "Failed to remove workout", variant: "destructive" })
     }
     setRemovingWorkoutId(null)
+  }
+
+  function openEditWeekDialog(workout: Workout) {
+    setEditWeekWorkout(workout)
+    setEditWeek(workout.weekNumber)
+    setEditDay(workout.dayOfWeek)
+    setEditWeekOpen(true)
+  }
+
+  async function saveWorkoutWeek() {
+    if (!editWeekWorkout) return
+    setSavingWeek(true)
+    
+    const res = await fetch(`/api/workouts/${editWeekWorkout.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editWeekWorkout.name,
+        description: editWeekWorkout.description,
+        weekNumber: editWeek,
+        dayOfWeek: editDay,
+        exercises: editWeekWorkout.exercises.map(ex => ({
+          exerciseId: ex.exercise.id,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          order: ex.order,
+        })),
+      }),
+    })
+    
+    if (res.ok) {
+      // Refresh program to get updated workout
+      const programRes = await fetch(`/api/programs/${id}`)
+      if (programRes.ok) {
+        const data = await programRes.json()
+        setProgram(data)
+      }
+      toast({ title: "Workout week updated" })
+      setEditWeekOpen(false)
+    } else {
+      toast({ title: "Failed to update workout week", variant: "destructive" })
+    }
+    setSavingWeek(false)
   }
 
   function openSettingsDialog() {
@@ -338,6 +406,13 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                           {workout.exercises.length} exercises
                         </span>
                         <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditWeekDialog(workout)}
+                        >
+                          Edit Week
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => removeWorkout(workout.id)}
@@ -422,41 +497,82 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {availableWorkouts.map((workout) => (
-                <label
-                  key={workout.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      if (selectedWorkoutIds.includes(workout.id)) {
-                        setSelectedWorkoutIds(selectedWorkoutIds.filter(id => id !== workout.id))
-                      } else {
-                        setSelectedWorkoutIds([...selectedWorkoutIds, workout.id])
-                      }
-                    }}
-                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                      selectedWorkoutIds.includes(workout.id)
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-muted-foreground"
-                    }`}
-                  >
-                    {selectedWorkoutIds.includes(workout.id) && (
-                      <span className="text-xs">✓</span>
-                    )}
-                  </button>
-                  <div className="flex-1">
-                    <div className="font-medium">{workout.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {workout.exerciseCount} exercises
-                    </div>
+            <>
+              {/* Week/Day selectors - shown when workouts are selected */}
+              {selectedWorkoutIds.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-muted/50 rounded-lg mb-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Week Number</Label>
+                    <Select
+                      value={addWorkoutWeek === null ? "none" : String(addWorkoutWeek)}
+                      onValueChange={(v) => setAddWorkoutWeek(v === "none" ? null : Number(v))}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Unassigned</SelectItem>
+                        {Array.from({ length: program.totalWeeks || 12 }, (_, i) => i + 1).map(w => (
+                          <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </label>
-              ))}
-            </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Day of Week</Label>
+                    <Select
+                      value={addWorkoutDay === null ? "none" : String(addWorkoutDay)}
+                      onValueChange={(v) => setAddWorkoutDay(v === "none" ? null : Number(v))}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Unassigned</SelectItem>
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                          <SelectItem key={i} value={String(i)}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                {availableWorkouts.map((workout) => (
+                  <label
+                    key={workout.id}
+                    className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        if (selectedWorkoutIds.includes(workout.id)) {
+                          setSelectedWorkoutIds(selectedWorkoutIds.filter(id => id !== workout.id))
+                        } else {
+                          setSelectedWorkoutIds([...selectedWorkoutIds, workout.id])
+                        }
+                      }}
+                      className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                        selectedWorkoutIds.includes(workout.id)
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-muted-foreground"
+                      }`}
+                    >
+                      {selectedWorkoutIds.includes(workout.id) && (
+                        <span className="text-xs">✓</span>
+                      )}
+                    </button>
+                    <div className="flex-1">
+                      <div className="font-medium">{workout.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {workout.exerciseCount} exercises
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </>
           )}
           
           <div className="flex justify-end gap-2 mt-4">
@@ -518,6 +634,62 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
             </Button>
             <Button onClick={saveSettings} disabled={savingSettings}>
               {savingSettings ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Workout Week Dialog */}
+      <Dialog open={editWeekOpen} onOpenChange={setEditWeekOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Workout Week</DialogTitle>
+            <DialogDescription>
+              {editWeekWorkout?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Week Number</Label>
+              <Select
+                value={editWeek === null ? "none" : String(editWeek)}
+                onValueChange={(v) => setEditWeek(v === "none" ? null : Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {Array.from({ length: program.totalWeeks || 12 }, (_, i) => i + 1).map(w => (
+                    <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Day of Week</Label>
+              <Select
+                value={editDay === null ? "none" : String(editDay)}
+                onValueChange={(v) => setEditDay(v === "none" ? null : Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                    <SelectItem key={i} value={String(i)}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditWeekOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveWorkoutWeek} disabled={savingWeek}>
+              {savingWeek ? "Saving..." : "Save"}
             </Button>
           </div>
         </DialogContent>
