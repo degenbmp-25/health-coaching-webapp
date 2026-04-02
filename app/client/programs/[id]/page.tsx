@@ -167,6 +167,20 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
         </Card>
       )}
 
+      {/* Not started banner for programs with future start dates */}
+      {program.currentWeek === null && program.program.startDate && program.program.totalWeeks !== null && (
+        <Card className="mb-4 border-primary/50 bg-primary/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Program starts {new Date(program.program.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                <p className="text-sm text-muted-foreground">Get ready! Your workout program will begin soon.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="mb-4">
         <CardHeader>
           <CardTitle>Progress</CardTitle>
@@ -225,16 +239,22 @@ export default function ClientProgramDetailPage({ params }: { params: { id: stri
                   const globalIndex = program.workouts.findIndex((w) => w.id === workout.id)
                   // Calculate workout date
                   let workoutDate: string | null = null
+                  let workoutDateObj: Date | null = null
                   if (workout.scheduledDate) {
-                    workoutDate = new Date(workout.scheduledDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                    workoutDateObj = new Date(workout.scheduledDate)
+                    workoutDate = workoutDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                   } else if (program.program.startDate && workout.weekNumber !== null) {
                     const start = new Date(program.program.startDate)
                     const daysToAdd = (workout.weekNumber - 1) * 7 + (workout.dayOfWeek ?? 0)
-                    const date = new Date(start.getTime() + daysToAdd * 24 * 60 * 60 * 1000)
-                    workoutDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                    workoutDateObj = new Date(start.getTime() + daysToAdd * 24 * 60 * 60 * 1000)
+                    workoutDate = workoutDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                   }
-                  // Check if this is today's workout
-                  const isToday = workoutDate === new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  // Check if this is today's workout (locale-independent comparison)
+                  const today = new Date()
+                  const isToday = workoutDateObj !== null &&
+                    workoutDateObj.getFullYear() === today.getFullYear() &&
+                    workoutDateObj.getMonth() === today.getMonth() &&
+                    workoutDateObj.getDate() === today.getDate()
                   return (
                     <Card key={workout.id} className={isToday ? "border-primary/50" : ""}>
                       <CardHeader>

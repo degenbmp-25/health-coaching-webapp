@@ -76,30 +76,37 @@ export async function PATCH(
       return new Response("Forbidden", { status: 403 })
     }
 
+    // Build update data, filtering out undefined values
+    const updateData: Record<string, any> = {
+      name: body.name,
+      description: body.description,
+      weekNumber: body.weekNumber,
+      dayOfWeek: body.dayOfWeek,
+      exercises: {
+        deleteMany: {},
+        create: body.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          weight: exercise.weight,
+          notes: exercise.notes,
+          order: exercise.order,
+          muxPlaybackId: exercise.muxPlaybackId,
+        })),
+      },
+    }
+
+    // Handle scheduledDate explicitly: only include if explicitly set (not undefined)
+    if (body.scheduledDate !== undefined) {
+      updateData.scheduledDate = body.scheduledDate ? new Date(body.scheduledDate) : null
+    }
+
     // Update the workout
     await db.workout.update({
       where: {
         id: params.workoutId,
       },
-      data: {
-        name: body.name,
-        description: body.description,
-        weekNumber: body.weekNumber,
-        dayOfWeek: body.dayOfWeek,
-        scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : body.scheduledDate === null ? null : undefined,
-        exercises: {
-          deleteMany: {},
-          create: body.exercises.map((exercise) => ({
-            exerciseId: exercise.exerciseId,
-            sets: exercise.sets,
-            reps: exercise.reps,
-            weight: exercise.weight,
-            notes: exercise.notes,
-            order: exercise.order,
-            muxPlaybackId: exercise.muxPlaybackId,
-          })),
-        },
-      },
+      data: updateData,
     })
 
     return new Response(null, { status: 200 })
@@ -153,7 +160,7 @@ export async function DELETE(
         where: {
           userId: user.id,
           organizationId: workout.program.organizationId,
-          role: { in: ["OWNER", "TRAINER"] },
+          role: { in: ["owner", "trainer"] },
         },
       })
       isTrainerOrOwner = !!membership

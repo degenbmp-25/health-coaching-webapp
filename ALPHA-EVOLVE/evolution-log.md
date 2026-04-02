@@ -778,3 +778,79 @@ Fixed 5 MEDIUM issues identified in the Option C: Clerk ID Standardization revie
 - [x] Workout edit page documents Clerk ID requirement in URL
 - [x] Goals route allows trainers/owners to access trainee goals (consistent with other routes)
 - [x] Build passes without TypeScript errors in modified files
+
+---
+
+## Bug Fixes (Loop 11) - 2026-04-01 - Review Report Critical/HIGH Issues
+
+### CRITICAL Issues Fixed (3)
+
+#### CRITICAL #1: `calculateCurrentWeek` returns 0 for unstarted programs
+**Status:** Fixed
+- **Problem:** When `diffDays < 0` (program hasn't started), function returned `0` → UI displayed "Week 0 of X"
+- **Fix:** Changed `return 0` to `return null` to signal "not started yet"
+- **File:** `lib/program-utils.ts`
+- **Additional Fix:** Added "Program starts X" banner in client page when `currentWeek === null` and `startDate` is set
+
+#### CRITICAL #2: Empty `startDate` input causes `Invalid Date` error
+**Status:** Fixed
+- **Problem:** Empty string is truthy in JS ternary `startDate ? new Date(startDate) : null` → `new Date("").toISOString()` = "Invalid Date"
+- **Fix:** Changed to `startDate !== "" ? new Date(startDate).toISOString() : null`
+- **File:** `app/trainer/programs/[id]/page.tsx`
+
+#### CRITICAL #3: `scheduledDate: undefined` in workouts PATCH
+**Status:** Fixed
+- **Problem:** When `body.scheduledDate` was `undefined` (field not provided), the ternary returned `undefined` which could cause issues with Prisma update
+- **Fix:** Separated update data construction from the Prisma call. `scheduledDate` is only included in `updateData` if explicitly set (not `undefined`)
+- **File:** `app/api/workouts/[workoutId]/route.ts`
+
+### HIGH Issues Fixed (3)
+
+#### HIGH #1: `totalWeeks` input accepts non-numeric strings
+**Status:** Fixed
+- **Problem:** If user typed "abc" in totalWeeks input, `Number("abc")` returns `NaN`, which was sent to API and failed Prisma validation
+- **Fix:** Added validation: `totalWeeks !== "" && !isNaN(Number(totalWeeks)) ? Number(totalWeeks) : null`
+- **File:** `app/trainer/programs/[id]/page.tsx`
+
+#### HIGH #2: Locale-dependent "Today" comparison
+**Status:** Fixed
+- **Problem:** `toLocaleDateString()` comparison is locale-dependent and fragile
+- **Fix:** Added `workoutDateObj` tracking, then compare year/month/day directly: `workoutDateObj.getFullYear() === today.getFullYear() && workoutDateObj.getMonth() === today.getMonth() && workoutDateObj.getDate() === today.getDate()`
+- **File:** `app/client/programs/[id]/page.tsx`
+
+#### HIGH #3: `formatWeekDisplay` returns "Week 0 of 0" for null values
+**Status:** Fixed
+- **Problem:** `"Week 0 of 0"` is confusing display for null/unknown week
+- **Fix:** Changed to return `"Week ?"` when either `weekNumber` or `totalWeeks` is null
+- **File:** `lib/program-utils.ts`
+
+### LOW Issue Fixed (1)
+
+#### LOW #1: Role check uses uppercase strings but schema uses lowercase
+**Status:** Fixed
+- **Problem:** `role: { in: ["OWNER", "TRAINER"] }` in DELETE handler would never match schema's lowercase values
+- **Fix:** Changed to `role: { in: ["owner", "trainer"] }`
+- **File:** `app/api/workouts/[workoutId]/route.ts`
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `lib/program-utils.ts` | `calculateCurrentWeek` returns null (not 0) for unstarted; `formatWeekDisplay` returns "Week ?" for nulls |
+| `app/trainer/programs/[id]/page.tsx` | `startDate !== ""` check; `totalWeeks` NaN validation |
+| `app/api/workouts/[workoutId]/route.ts` | `scheduledDate` explicitly handled to exclude undefined; role case fixed to lowercase |
+| `app/client/programs/[id]/page.tsx` | Locale-independent Today comparison; added "Program starts X" banner for unstarted |
+
+---
+
+## Success Criteria Met
+
+- [x] `calculateCurrentWeek` returns `null` for unstarted programs (UI shows "Program starts X" instead of "Week 0")
+- [x] Empty `startDate` input is properly treated as null (no "Invalid Date" error)
+- [x] `scheduledDate: undefined` is excluded from Prisma update data
+- [x] `totalWeeks` rejects non-numeric strings (sends null instead of NaN)
+- [x] "Today" comparison works regardless of locale settings
+- [x] "Week ?" displayed instead of confusing "Week 0 of 0"
+- [x] Role check matches lowercase schema values

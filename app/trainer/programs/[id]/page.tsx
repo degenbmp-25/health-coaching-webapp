@@ -248,8 +248,8 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        startDate: startDate ? new Date(startDate).toISOString() : null,
-        totalWeeks: totalWeeks !== "" ? Number(totalWeeks) : null,
+        startDate: startDate !== "" ? new Date(startDate).toISOString() : null,
+        totalWeeks: totalWeeks !== "" && !isNaN(Number(totalWeeks)) ? Number(totalWeeks) : null,
       }),
     })
 

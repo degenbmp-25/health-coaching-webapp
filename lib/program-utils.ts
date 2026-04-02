@@ -29,7 +29,7 @@ export function calculateCurrentWeek(
 
   if (diffDays < 0) {
     // Program hasn't started yet
-    return 0
+    return null
   }
 
   const currentWeek = Math.floor(diffDays / 7) + 1
@@ -88,7 +88,7 @@ export function formatWeekDisplay(
   totalWeeks: number | null
 ): string {
   if (weekNumber === null || totalWeeks === null) {
-    return "Week 0 of 0"
+    return "Week ?"
   }
   return `Week ${weekNumber} of ${totalWeeks}`
 }
