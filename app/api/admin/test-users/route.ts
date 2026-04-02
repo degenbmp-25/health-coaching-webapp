@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     if (programId) {
       programAssignment = await db.programAssignment.create({
         data: {
-          userId: dbUser.id,
+          clientId: dbUser.id,
           programId: programId,
         },
         include: {
