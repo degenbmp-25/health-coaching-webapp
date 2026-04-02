@@ -69,14 +69,14 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
       : []
   }
 
-  // Transform workout data for the form (include muxPlaybackId)
+  // Transform workout data for the form (include organizationVideoId)
   const workoutData = {
     id: workout.id,
     name: workout.name,
     description: workout.description,
     weekNumber: workout.weekNumber,
     dayOfWeek: workout.dayOfWeek,
-    exercises: workout.exercises.map(we => ({
+    exercises: workout.exercises.map((we: any) => ({
       id: we.exerciseId,
       name: we.exercise.name,
       sets: we.sets,
@@ -84,6 +84,8 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
       weight: we.weight,
       notes: we.notes,
       muxPlaybackId: we.muxPlaybackId,
+      // Pass organizationVideoId so the form pre-selects the correct video
+      organizationVideoId: (we as any).organizationVideoId || null,
     })),
   }
 

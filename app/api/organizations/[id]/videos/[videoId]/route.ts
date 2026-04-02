@@ -2,6 +2,65 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/session'
 import { db } from '@/lib/db'
 
+// PATCH /api/organizations/[id]/videos/[videoId] - Update video (rename)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; videoId: string }> }
+) {
+  try {
+    const { id: orgId, videoId } = await params
+    const user = await getCurrentUser()
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify user is owner/trainer in this organization
+    const membership = await db.organizationMember.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: user.id,
+        role: { in: ['owner', 'trainer'] }
+      }
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Get video to check it exists and belongs to org
+    const video = await db.organizationVideo.findFirst({
+      where: {
+        id: videoId,
+        organizationId: orgId
+      }
+    })
+
+    if (!video) {
+      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+    }
+
+    const body = await req.json()
+    const { title } = body
+
+    if (title !== undefined) {
+      if (typeof title !== 'string' || title.trim().length === 0) {
+        return NextResponse.json({ error: 'Title must be a non-empty string' }, { status: 400 })
+      }
+
+      await db.organizationVideo.update({
+        where: { id: videoId },
+        data: { title: title.trim() }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error updating video:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 // DELETE /api/organizations/[id]/videos/[videoId] - Delete a video
 export async function DELETE(
   req: NextRequest,

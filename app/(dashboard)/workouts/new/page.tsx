@@ -1,11 +1,17 @@
+import { redirect } from 'next/navigation'
 import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { db } from "@/lib/db"
+import { getCurrentUser } from "@/lib/session"
+import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewWorkoutPage() {
-  // Log entry point
-  console.error("--- Loading NewWorkoutPage ---");
+  const user = await getCurrentUser()
+  
+  if (!user) {
+    redirect("/signin")
+  }
 
   // Fetch all exercises
   const exercises = await db.exercise.findMany({
@@ -14,8 +20,36 @@ export default async function NewWorkoutPage() {
     },
   })
 
-  // Log the fetched exercises using console.error
-  console.error("Fetched exercises for new workout page:", JSON.stringify(exercises, null, 2));
+  // Get user's organization membership and videos (for video selector)
+  let organizationVideos: any[] = []
+  let isTrainer = false
+
+  // Also check User.role === 'coach' since coaches manage workouts
+  const dbUser = await db.user.findUnique({
+    where: { id: user.id },
+    select: { role: true }
+  })
+
+  const membership = await db.organizationMember.findFirst({
+    where: {
+      userId: user.id,
+      role: { in: ['owner', 'trainer', 'coach'] }
+    },
+    include: { organization: true }
+  })
+
+  if (membership || dbUser?.role === 'coach') {
+    isTrainer = true
+    organizationVideos = membership
+      ? await db.organizationVideo.findMany({
+          where: {
+            organizationId: membership.organizationId,
+            status: 'ready'
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : []
+  }
 
   // Create empty workout data
   const workoutData = {
@@ -27,7 +61,16 @@ export default async function NewWorkoutPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <WorkoutEditForm workout={workoutData} exercises={exercises} />
+      <DashboardHeader
+        heading="New Workout"
+        text="Create a new workout plan."
+      />
+      <WorkoutEditForm 
+        workout={workoutData} 
+        exercises={exercises}
+        videos={organizationVideos}
+        isTrainer={isTrainer}
+      />
     </div>
   )
-} 
+}
