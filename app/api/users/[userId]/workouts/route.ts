@@ -35,7 +35,7 @@ async function authorizeWorkoutAccess(
   currentUserId: string,
   targetDbUserId: string // Now takes DB user ID (CUID)
 ): Promise<{ authorized: boolean; targetMembership: { organizationId: string } | null }> {
-  // If accessing own data, no org check needed
+  // If accessing own data
   if (currentUserId === targetDbUserId) {
     const targetMembership = await db.organizationMember.findFirst({
       where: { userId: targetDbUserId },
@@ -44,7 +44,24 @@ async function authorizeWorkoutAccess(
     return { authorized: true, targetMembership };
   }
 
-  // Get target user's organization membership
+  // Check coach-student relationship
+  const student = await db.user.findFirst({
+    where: {
+      id: targetDbUserId,
+      coachId: currentUserId,
+    },
+  });
+
+  if (student) {
+    // Coach accessing student - return org membership if exists
+    const targetMembership = await db.organizationMember.findFirst({
+      where: { userId: targetDbUserId },
+      select: { organizationId: true },
+    });
+    return { authorized: true, targetMembership };
+  }
+
+  // Fall back to organization membership check
   const targetMembership = await db.organizationMember.findFirst({
     where: { userId: targetDbUserId },
     select: { organizationId: true },

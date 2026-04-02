@@ -22,16 +22,27 @@ export async function GET(
       return new NextResponse("User not found", { status: 404 })
     }
 
-    // Authorization: own data or org trainer/owner
+    // Authorization: own data, coach-student relationship, or org trainer/owner
     if (user.id !== targetDbUserId) {
-      const membership = await db.organizationMember.findFirst({
+      // Check coach-student relationship first
+      const student = await db.user.findFirst({
         where: {
-          userId: user.id,
-          role: { in: ["owner", "trainer", "coach"] },
+          id: targetDbUserId,
+          coachId: user.id,
         },
       })
-      if (!membership) {
-        return new NextResponse("Forbidden", { status: 403 })
+
+      if (!student) {
+        // Fall back to organization membership check
+        const membership = await db.organizationMember.findFirst({
+          where: {
+            userId: user.id,
+            role: { in: ["owner", "trainer", "coach"] },
+          },
+        })
+        if (!membership) {
+          return new NextResponse("Forbidden", { status: 403 })
+        }
       }
     }
 
@@ -74,16 +85,27 @@ export async function POST(
       return new NextResponse("User not found", { status: 404 })
     }
 
-    // Authorization: own data or org trainer/owner
+    // Authorization: own data, coach-student relationship, or org trainer/owner
     if (user.id !== targetDbUserId) {
-      const membership = await db.organizationMember.findFirst({
+      // Check coach-student relationship first
+      const student = await db.user.findFirst({
         where: {
-          userId: user.id,
-          role: { in: ["owner", "trainer", "coach"] },
+          id: targetDbUserId,
+          coachId: user.id,
         },
       })
-      if (!membership) {
-        return new NextResponse("Forbidden", { status: 403 })
+
+      if (!student) {
+        // Fall back to organization membership check
+        const membership = await db.organizationMember.findFirst({
+          where: {
+            userId: user.id,
+            role: { in: ["owner", "trainer", "coach"] },
+          },
+        })
+        if (!membership) {
+          return new NextResponse("Forbidden", { status: 403 })
+        }
       }
     }
 
