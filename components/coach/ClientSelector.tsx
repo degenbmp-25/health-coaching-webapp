@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useUser } from "@clerk/nextjs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,30 +34,13 @@ interface MeResponse extends User {
 }
 
 export function ClientSelector({ coachId, onClientAdded }: ClientSelectorProps) {
+  const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [addingId, setAddingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Store the current user's database ID (CUID), resolved from Clerk ID
-  const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
   const { toast } = useToast()
-
-  // Resolve Clerk ID to database ID on component mount
-  useEffect(() => {
-    const resolveDbId = async () => {
-      try {
-        const response = await fetch("/api/users/me")
-        if (response.ok) {
-          const user: MeResponse = await response.json()
-          setCurrentUserDbId(user.id)
-        }
-      } catch (err) {
-        console.error("Failed to resolve user DB ID:", err)
-      }
-    }
-    resolveDbId()
-  }, [])
 
   const searchUsers = async () => {
     if (!searchQuery.trim()) return
@@ -85,8 +69,11 @@ export function ClientSelector({ coachId, onClientAdded }: ClientSelectorProps) 
   }
 
   const addAsClient = async (userId: string) => {
-    // Ensure we have the DB ID resolved before making the API call
-    if (!currentUserDbId) {
+    // userId passed here is the potential client's CUID from search results
+    // We need the coach's Clerk ID for the API call
+    const coachClerkId = user?.id // From useUser()
+    
+    if (!coachClerkId) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -99,9 +86,9 @@ export function ClientSelector({ coachId, onClientAdded }: ClientSelectorProps) 
       setAddingId(userId)
       setError(null)
       
-      // Call the students endpoint with the database ID (not Clerk ID)
+      // Call the students endpoint with the coach's Clerk ID
       // This sets the user's coachId to this coach
-      const response = await fetch(`/api/users/${currentUserDbId}/students`, {
+      const response = await fetch(`/api/users/${coachClerkId}/students`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

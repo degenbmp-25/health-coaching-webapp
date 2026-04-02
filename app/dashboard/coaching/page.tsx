@@ -38,41 +38,29 @@ export default function CoachingPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
-  // Store the current user's database ID (resolved from Clerk ID)
-  const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
 
-  // Resolve Clerk ID to database ID on component mount
-  useEffect(() => {
-    const resolveDbId = async () => {
-      try {
-        const response = await fetch("/api/users/me")
-        if (response.ok) {
-          const userData = await response.json()
-          setCurrentUserDbId(userData.id)
-        }
-      } catch (err) {
-        console.error("Failed to resolve user DB ID:", err)
-      }
-    }
-    resolveDbId()
-  }, [])
+  const userId = user?.id
+  const userRole = user?.publicMetadata?.role || "user"
 
   const fetchStudents = useCallback(async () => {
-    if (!currentUserDbId) return
+    // Use Clerk ID (user.id) for API calls - API handles resolution to CUID
+    if (!userId) return
 
     setIsLoadingStudents(true)
     try {
-      const response = await fetch(`/api/users/${currentUserDbId}/students`)
+      const response = await fetch(`/api/users/${userId}/students`)
       if (response.ok) {
         const data = await response.json()
         setStudents(data)
+      } else {
+        console.error("Failed to fetch students:", response.status)
       }
     } catch (error) {
       console.error("Error fetching students:", error)
     } finally {
       setIsLoadingStudents(false)
     }
-  }, [currentUserDbId])
+  }, [userId])
   
   useEffect(() => {
     if (user?.publicMetadata?.role === "coach") {
@@ -81,7 +69,7 @@ export default function CoachingPage() {
     } else {
       setActiveTab("student")
     }
-  }, [user?.publicMetadata?.role, fetchStudents])
+  }, [user?.publicMetadata?.role, fetchStudents, userId])
 
   if (!user) {
     return (
@@ -90,9 +78,6 @@ export default function CoachingPage() {
       </div>
     )
   }
-
-  const userId = user.id
-  const userRole = user.publicMetadata?.role || "user"
 
   const handleCoachSelected = () => {
     setShowCoachSearch(false)
@@ -163,7 +148,7 @@ export default function CoachingPage() {
         </TabsList>
         
         <TabsContent value="student" className="space-y-4">
-          <UserCoach userId={userId} onHasCoach={setHasCoach} refreshTrigger={refreshTrigger} />
+          <UserCoach userId={userId || ""} onHasCoach={setHasCoach} refreshTrigger={refreshTrigger} />
           
           {!showCoachSearch && !hasCoach && (
             <div className="flex justify-center mt-4">
@@ -175,7 +160,7 @@ export default function CoachingPage() {
           
           {showCoachSearch && (
             <CoachSelector 
-              userId={userId}
+              userId={userId || ""}
               onCoachSelected={handleCoachSelected}
             />
           )}
@@ -207,13 +192,13 @@ export default function CoachingPage() {
             <div className="space-y-6">
               {/* Add Client Selector */}
               <ClientSelector 
-                coachId={currentUserDbId || userId} 
+                coachId={userId || ""} 
                 onClientAdded={fetchStudents}
               />
               
               {/* Student Data Dashboard */}
               <StudentDataDashboard 
-                coach={currentUserDbId}
+                coach={userId}
                 students={students}
               />
               
@@ -226,7 +211,7 @@ export default function CoachingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <CoachStudents userId={userId} />
+                  <CoachStudents userId={userId || ""} />
                 </CardContent>
               </Card>
             </div>
