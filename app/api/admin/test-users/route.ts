@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import { clerkClient } from "@clerk/nextjs/server"
 import { db } from "@/lib/db"
+import { requireAuth } from "@/lib/auth-utils"
 
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY
 
 export async function POST(req: NextRequest) {
   try {
-    // Get the current user from Clerk
-    const userId = req.headers.get("x-clerk-user-id")
-    
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get the current authenticated user from database
+    const user = await requireAuth()
+
+    if (user instanceof NextResponse) {
+      return user
     }
 
-    // Get current user's organization membership to check role
-    const clerk = await clerkClient()
-    const user = await clerk.users.getUser(userId)
-    
-    // Check if user is an owner or trainer
-    const orgMemberships = await clerk.organizations.getOrganizationMemberships({ userId })
-    const habithleticsGym = orgMemberships.find((m: any) => 
-      m.organization?.name?.toLowerCase().includes("habithletics")
-    )
-    
-    if (!habithleticsGym || !["owner", "trainer"].includes(habithleticsGym.role)) {
+    // Check if user is an owner or trainer in any organization
+    const membership = await db.organizationMember.findFirst({
+      where: {
+        userId: user.id,
+      },
+      include: {
+        organization: true,
+      }
+    })
+
+    if (!membership || !["owner", "trainer"].includes(membership.role)) {
       return NextResponse.json({ error: "Forbidden - must be owner or trainer" }, { status: 403 })
     }
 
@@ -65,16 +66,16 @@ export async function POST(req: NextRequest) {
     const clerkUserId = clerkData.id
 
     // Check if user already exists in our database
-    let dbUser = await db.user.findFirst({
+    const existingUser = await db.user.findFirst({
       where: { clerkId: clerkUserId }
     })
 
-    if (dbUser) {
+    if (existingUser) {
       return NextResponse.json({ error: "User already exists in database" }, { status: 400 })
     }
 
     // Create user in database
-    dbUser = await db.user.create({
+    const dbUser = await db.user.create({
       data: {
         clerkId: clerkUserId,
         email: email,
@@ -83,20 +84,11 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    // Find Habithletics Gym organization
-    const organization = await db.organization.findFirst({
-      where: { name: { contains: "Habithletics", mode: "insensitive" } }
-    })
-
-    if (!organization) {
-      return NextResponse.json({ error: "Habithletics Gym organization not found" }, { status: 500 })
-    }
-
-    // Add user to organization
+    // Add user to the same organization as the admin
     const orgMembership = await db.organizationMember.create({
       data: {
         userId: dbUser.id,
-        organizationId: organization.id,
+        organizationId: membership.organizationId,
         role: role,
       },
       include: {
