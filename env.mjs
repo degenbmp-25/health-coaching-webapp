@@ -9,6 +9,11 @@ export const env = createEnv({
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM: z.string().email().optional(),
     CRON_SECRET: z.string().min(1).optional(),
+    MUX_TOKEN_ID: z.string().min(1).optional(),
+    MUX_TOKEN_SECRET: z.string().min(1).optional(),
+    MUX_SIGNING_KEY_ID: z.string().min(1).optional(),
+    MUX_SIGNING_KEY: z.string().min(1).optional(),
+    DIRECT_URL: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
@@ -23,5 +28,10 @@ export const env = createEnv({
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM: process.env.RESEND_FROM,
     CRON_SECRET: process.env.CRON_SECRET,
+    MUX_TOKEN_ID: process.env.MUX_TOKEN_ID,
+    MUX_TOKEN_SECRET: process.env.MUX_TOKEN_SECRET,
+    MUX_SIGNING_KEY_ID: process.env.MUX_SIGNING_KEY_ID,
+    MUX_SIGNING_KEY: process.env.MUX_SIGNING_KEY,
+    DIRECT_URL: process.env.DIRECT_URL,
   },
 })

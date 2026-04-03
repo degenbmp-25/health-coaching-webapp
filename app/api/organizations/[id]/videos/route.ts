@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import Mux from '@mux/mux-node'
 
 // GET /api/organizations/[id]/videos - List all videos for an organization
 export async function GET(
@@ -77,55 +78,83 @@ export async function POST(
     const muxTokenId = process.env.MUX_TOKEN_ID
     const muxTokenSecret = process.env.MUX_TOKEN_SECRET
 
+    console.log('[DEBUG] Mux token ID present:', !!muxTokenId)
+    console.log('[DEBUG] Mux token Secret present:', !!muxTokenSecret)
+
     if (!muxTokenId || !muxTokenSecret) {
-      return NextResponse.json({ error: 'Mux not configured' }, { status: 500 })
+      console.error('[DEBUG] Mux credentials missing:', { muxTokenId: !!muxTokenId, muxTokenSecret: !!muxTokenSecret })
+      return NextResponse.json({ error: 'Mux credentials not configured on server' }, { status: 500 })
     }
 
-    // Create Mux upload URL
-    const credentials = Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')
-    
-    const muxResponse = await fetch('https://api.mux.com/video/v1/uploads', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${credentials}`
-      },
-      body: JSON.stringify({
-        cors_origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    // Validate Mux credentials format (they should be UUIDs)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(muxTokenId)) {
+      console.error('[DEBUG] Mux token ID is not a valid UUID format')
+      return NextResponse.json({ error: 'Mux credentials are invalid' }, { status: 500 })
+    }
+
+    try {
+      // Use Mux SDK to create upload URL
+      const mux = new Mux({
+        tokenId: muxTokenId,
+        tokenSecret: muxTokenSecret,
+      })
+
+      console.log('[DEBUG] Mux client initialized, creating upload...')
+      
+      // Get the app URL for cors_origin, default to a safe value
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL
+      const corsOrigin = appUrl && appUrl.startsWith('http') ? appUrl : 'https://app.habithletics.com'
+      
+      console.log('[DEBUG] Creating upload with cors_origin:', corsOrigin)
+      
+      const upload = await mux.video.uploads.create({
         new_asset_settings: {
           playback_policy: ['signed'],
-          mp4_support: 'capped-1080p'
+          mp4_support: 'capped-1080p',
+        },
+        cors_origin: corsOrigin,
+      })
+
+      console.log('[DEBUG] Mux upload created successfully:', JSON.stringify({ id: upload.id, url: upload.url, asset_id: upload.asset_id }))
+
+      // Create video record in database
+      const video = await db.organizationVideo.create({
+        data: {
+          organizationId: orgId,
+          muxAssetId: upload.asset_id || upload.id, // Use upload ID as fallback
+          title,
+          status: 'pending'
         }
       })
-    })
 
-    if (!muxResponse.ok) {
-      const error = await muxResponse.text()
-      console.error('Mux upload creation failed:', error)
-      return NextResponse.json({ error: 'Failed to create upload URL' }, { status: 500 })
-    }
-
-    const muxData = await muxResponse.json()
-    const { id: uploadId, url: uploadUrl } = muxData.data
-    const { id: assetId } = muxData.data.asset_id || {}
-
-    // Create video record in database
-    const video = await db.organizationVideo.create({
-      data: {
-        organizationId: orgId,
-        muxAssetId: assetId || uploadId, // Use upload ID as fallback
-        title,
-        status: 'pending'
+      return NextResponse.json({
+        video,
+        uploadUrl: upload.url,
+        uploadId: upload.id
+      })
+    } catch (muxError) {
+      console.error('[DEBUG] Mux SDK error:', muxError)
+      console.error('[DEBUG] Mux error type:', muxError?.constructor?.name)
+      console.error('[DEBUG] Mux error message:', muxError instanceof Error ? muxError.message : String(muxError))
+      console.error('[DEBUG] Mux error stack:', muxError instanceof Error ? muxError.stack : 'no stack')
+      
+      // Return more specific error for Mux issues
+      if (muxError instanceof Error) {
+        // Check for common Mux errors
+        if (muxError.message.includes('401') || muxError.message.includes('authentication')) {
+          return NextResponse.json({ error: 'Mux authentication failed. Please check credentials.' }, { status: 500 })
+        }
+        if (muxError.message.includes('403') || muxError.message.includes('forbidden')) {
+          return NextResponse.json({ error: 'Mux access forbidden. Check permissions.' }, { status: 500 })
+        }
+        return NextResponse.json({ error: 'Failed to create upload URL', details: muxError.message }, { status: 500 })
       }
-    })
-
-    return NextResponse.json({
-      video,
-      uploadUrl,
-      uploadId
-    })
+      return NextResponse.json({ error: 'Failed to create upload URL', details: String(muxError) }, { status: 500 })
+    }
   } catch (error) {
-    console.error('Error creating video:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[DEBUG] Outer error creating video:', error)
+    console.error('[DEBUG] Error details:', error instanceof Error ? error.message : String(error))
+    return NextResponse.json({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }
