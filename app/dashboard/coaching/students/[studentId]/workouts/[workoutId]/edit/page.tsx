@@ -96,7 +96,7 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
       : []
   }
 
-  // Transform workout data for the form (include muxPlaybackId)
+  // Transform workout data for the form (include organizationVideoId)
   const workoutData = {
     id: workout.id,
     name: workout.name,
@@ -111,6 +111,7 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
       weight: we.weight,
       notes: we.notes,
       order: we.order,
+      organizationVideoId: we.organizationVideoId,
       muxPlaybackId: we.muxPlaybackId,
     })),
   }

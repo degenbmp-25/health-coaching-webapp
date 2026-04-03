@@ -44,7 +44,10 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     where: { id: workoutId },
     include: {
       exercises: {
-        include: { exercise: true },
+        include: { 
+          exercise: true,
+          organizationVideo: true,
+        },
         orderBy: { order: "asc" },
       },
     },
