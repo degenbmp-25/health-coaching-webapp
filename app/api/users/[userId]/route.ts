@@ -74,6 +74,35 @@ export async function GET(
       }
     }
     
+    // Check if the requesting user is the coach of the target user (via coachId relationship)
+    const isCoachOfStudent = await db.user.findFirst({
+      where: {
+        id: params.userId,
+        coachId: user.id,
+      },
+    })
+    
+    // Also check if current user has coach role
+    const isCoach = user.role === "coach"
+    
+    if (isCoachOfStudent || isCoach) {
+      const studentDetails = await db.user.findUnique({
+        where: {
+          id: params.userId,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      })
+
+      if (studentDetails) {
+        return NextResponse.json(studentDetails)
+      }
+    }
+    
     // Default case: fetch limited public info
     const userDetails = await db.user.findUnique({
       where: {
