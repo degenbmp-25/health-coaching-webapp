@@ -78,29 +78,18 @@ export async function POST(
     const muxTokenId = process.env.MUX_TOKEN_ID
     const muxTokenSecret = process.env.MUX_TOKEN_SECRET
 
-    console.log('[DEBUG] Mux token ID present:', !!muxTokenId)
-    console.log('[DEBUG] Mux token Secret present:', !!muxTokenSecret)
-
     if (!muxTokenId || !muxTokenSecret) {
-      console.error('[DEBUG] Mux credentials missing:', { muxTokenId: !!muxTokenId, muxTokenSecret: !!muxTokenSecret })
+      console.error('[Mux] Mux credentials are missing from environment variables')
       return NextResponse.json({ error: 'Mux credentials not configured on server' }, { status: 500 })
-    }
-
-    // Validate Mux credentials format (they should be UUIDs)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(muxTokenId)) {
-      console.error('[DEBUG] Mux token ID is not a valid UUID format')
-      return NextResponse.json({ error: 'Mux credentials are invalid' }, { status: 500 })
     }
 
     try {
       // Use Mux SDK to create upload URL
+      // Note: @mux/mux-node v12 uses tokenId and tokenSecret directly
       const mux = new Mux({
         tokenId: muxTokenId,
         tokenSecret: muxTokenSecret,
       })
-
-      console.log('[DEBUG] Mux client initialized, creating upload...')
       
       // Get the app URL for cors_origin, default to a safe value
       const appUrl = process.env.NEXT_PUBLIC_APP_URL
