@@ -1,86 +1,99 @@
-# Review Report - Clerk ID Standardization
+# Review Report - Loop 2 (Re-review after fixes)
 
-## Files Reviewed
+## Previous Critical Issues - Status
 
-1. `lib/api/id-utils.ts` - Updated
-2. `app/dashboard/coaching/page.tsx` - Updated
-3. `components/coach/ClientSelector.tsx` - Updated
-4. `app/api/users/[userId]/dashboard/route.ts` - Already had fix
-5. `app/api/users/[userId]/activities/route.ts` - Already had fix
-6. `app/api/users/[userId]/workouts/route.ts` - Already had fix
-7. `app/api/users/[userId]/meals/route.ts` - Already had fix
+### 1. Longest streak calculation bug in profile route
+- **FIXED**
+- The profile route now properly calculates longest streak by iterating sorted dates and checking consecutive day gaps (diff === 1). It also correctly handles the currentStreak calculation separately, tracking consecutive days ending today or yesterday.
+- The key fix: longestStreak = Math.max(longestStreak, currentStreak, streak) ensures the maximum is captured.
 
-## Issues Found
-
-### HIGH Priority
-
-None - all high priority issues were already addressed in previous loops.
-
-### MEDIUM Priority
-
-None.
-
-### LOW Priority (Pre-existing)
-
-1. **ESLint Warning**: `img` elements without alt props in:
-   - `app/admin/organizations/[id]/page.tsx:127`
-   - `app/trainer/clients/[id]/page.tsx:109`
-   - `app/trainer/clients/page.tsx:115`
-
-2. **React Hook Warning**: `useEffect` missing dependency `fetchTodaysActivitiesAndLogs` in:
-   - `components/pages/dashboard/todays-activities.tsx:40`
-
-3. **Static Generation Warning**: Cron routes using `headers` or `request.url` - expected behavior for dynamic API routes.
-
-## Authorization Flow Verification
-
-### Coach Adds Client
+### 2. `where: any` type bypass in notes route
+- **FIXED**
+- The notes route now builds a properly typed `where` object:
+```typescript
+const where: Parameters<typeof db.clientNote.findMany>[0]["where"] = { clientId }
+if (noteType) { where.noteType = noteType }
+if (tag) { where.tags = { some: { tag: { name: tag } } } }
 ```
-ClientSelector.addAsClient(userId)
-  → POST /api/users/${coachClerkId}/students
-    → requireAuth() returns coach with coachCUID
-    → resolveClerkIdToDbUserId(coachClerkId) → coachCUID ✓
-    → verify coach is owner/trainer/coach ✓
-    → verify user.id === targetDbUserId (coach accessing own) ✓
-    → POST body has clientCUID
-    → resolveClerkIdToDbUserId(clientCUID) → studentCUID ✓
-    → update student.coachId = coachCUID ✓
-```
+- TypeScript will now catch any invalid field names. The query is fully typed.
 
-### Coach Views Student Dashboard
+### 3. Expanded note state not cleared after editing
+- **FIXED**
+- `handleSaved()` now correctly resets all state:
+```typescript
+function handleSaved() {
+  setShowEditor(false)
+  setEditingNote(null)
+  setExpandedNoteId(null) // ← Now properly cleared
+  fetchNotes()
+  fetchTags()
+  toast({ title: "Note saved" })
+}
 ```
-StudentDataDashboard fetches /api/users/${studentClerkId}/dashboard
-  → requireAuth() returns coach with coachCUID
-  → resolveClerkIdToDbUserId(studentClerkId) → studentCUID ✓
-  → verify coach has org membership ✓
-  → getDashboardData(studentCUID) ✓
-```
+- Note: `handleCancel` does NOT clear expandedNoteId, which is minor but acceptable (user may want to keep note expanded after cancel).
 
-### Coach Views Student Meals
+---
+
+## Previous High Issues - Status
+
+### 4. No validation on `limit`/`offset` pagination params
+- **FIXED**
+- Zod schema validates and transforms both parameters:
+```typescript
+limit: z.string().transform((v) => parseInt(v, 10)).pipe(z.number().int().min(1).max(100))
+offset: z.string().transform((v) => parseInt(v, 10)).pipe(z.number().int().min(0).max(10000))
 ```
-StudentDataDashboard fetches /api/users/${studentClerkId}/meals
-  → requireAuth() returns coach with coachCUID
-  → resolveClerkIdToDbUserId(studentClerkId) → studentCUID ✓
-  → currentUser.id !== targetDbUserId (coachCUID !== studentCUID)
-  → verify db.user(coachId = coachCUID) exists ✓
-  → get meals where userId = studentCUID ✓
+- Invalid values (NaN, out of range) return 400 with descriptive errors.
+
+### 5. Query endpoint does full table scan on nutrition/diet pattern
+- **FIXED**
+- Nutrition/diet query now limits to 50 notes before JavaScript filtering:
+```typescript
+take: 50,
+```
+- Combined with Prisma's `where: { clientId }` (indexed), this limits the scan.
+
+### 6. No server-side query length limit
+- **FIXED**
+- Query route now enforces 500 character limit:
+```typescript
+if (rawQuery.length > 500) {
+  return new NextResponse(JSON.stringify({ message: "Query too long. Maximum 500 characters." }), { status: 400 })
+}
 ```
 
-## Quality Gates: PASSED
+### 7. New tag color inconsistency
+- **FIXED**
+- Both server and client use identical deterministic algorithm:
+```typescript
+const colorIdx = name.split("").reduce(
+  (acc, ch) => (acc * 31 + ch.charCodeAt(0)) & 0xffffffff, 0
+) % colorPalette.length
+```
+- Same 10-color palette on both sides. New tags created client-side will have colors matching server-created tags.
 
-- [x] All CRITICAL issues resolved
-- [x] All HIGH issues resolved  
-- [x] Build passes
-- [x] TypeScript compiles
-- [x] No new regressions introduced
+---
 
-## Remaining Work
+## New Issues Found
 
-1. Fix pre-existing ESLint warnings (img alt tags)
-2. Fix pre-existing React Hook dependency warning
-3. Consider adding integration tests for the coaching flow
+None. All fixes appear correct and no regressions were introduced.
 
-## Deployment
+---
 
-Committed and pushed to `feature/video-selector-for-exercises`.
-Deployed to Vercel production.
+## Quality Score: 9/10
+
+Deduction: The `handleCancel` function in coach-notes-panel.tsx does not clear `expandedNoteId`, leaving a note in expanded state after canceling an edit. This is minor but inconsistent with the fix for issue #3.
+
+---
+
+## Production Ready: YES
+
+All critical and high issues have been addressed:
+- Streak calculation is correct
+- Query types are properly enforced
+- Pagination has validation
+- Table scans are limited
+- Query length is bounded
+- Tag colors are consistent
+
+The codebase is in good shape for deployment.

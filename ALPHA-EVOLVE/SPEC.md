@@ -1,112 +1,368 @@
-# SPEC.md - Habithletics Clerk ID Standardization
+# Client Memory Graph — SPEC.md
 
-## Problem Statement
+## 1. Concept & Vision
 
-Clerk IDs (format: `user_xxx`) and Database CUIDs (format: `clndxxx`) are being mixed throughout the codebase, causing 403 Forbidden errors when coaches try to view their students' data.
+A compounding knowledge layer for health coaches — every client interaction (workout, note, conversation) feeds into a unified memory graph that grows smarter over time. Rather than a coach asking "what do I know about this person?", they see it aggregated: progress trends, coaching observations, flagged concerns, and key facts surfaced in context.
 
-### Root Cause
+This is NOT a general AI query system. It's a structured knowledge graph with a natural-language-style query interface, backed by connected data sources (DB + Discord messages + vault notes + questionnaire).
 
-1. **Frontend sources:**
-   - `useUser().id` returns Clerk ID (e.g., `user_2abc123`)
-   - `/api/users/me` returns user object with both `id` (CUID) and `clerkId` (Clerk ID)
+**Design metaphor:** A coach's mental model of a client — structured like a living notebook that organizes itself.
 
-2. **Frontend stores CUID instead of Clerk ID:**
-   - Components like `ClientSelector` and `CoachingPage` call `/api/users/me`, store `user.id` (CUID), and use it in API URLs
-   - But API routes expect Clerk IDs and call `resolveClerkIdToDbUserId()` to convert
+---
 
-3. **API route pattern:**
-   - URL params: expect Clerk ID
-   - `resolveClerkIdToDbUserId(params.userId)` converts Clerk ID → CUID for DB queries
-   - When passed CUID instead of Clerk ID, resolution fails (looks for `clerkId = "clndxxx"` which doesn't exist)
+## 2. Design Principles
 
-### Affected Files
+- **No RAG initially** — direct DB queries; the graph IS the knowledge base
+- **Structured over semantic** — tags, types, timestamps beat embeddings for this use case
+- **Compounding by default** — every coach note, workout session, and message auto-feeds the profile
+- **Coach sees all** — access gated by coach→client relationship (org role or coachId)
+- **Existing Habithletics untouched** — this feature lives in a new feature branch, new files only
 
-| File | Issue |
-|------|-------|
-| `app/dashboard/coaching/page.tsx` | Uses `currentUserDbId` (CUID) in `/api/users/${currentUserDbId}/students` |
-| `components/coach/ClientSelector.tsx` | Uses `currentUserDbId` (CUID) in `/api/users/${currentUserDbId}/students` |
-| `components/coach/StudentDataDashboard.tsx` | Uses `selectedStudent.clerkId` correctly in most places |
-| `lib/api/id-utils.ts` | `resolveClerkIdToDbUserId` only handles Clerk IDs, not CUIDs |
+---
 
-### Authorization Flow (Working Case)
+## 3. Data Sources & Aggregation
 
-When coach views student's meals via `/api/users/${studentClerkId}/meals`:
-1. API receives Clerk ID `user_student`
-2. `resolveClerkIdToDbUserId("user_student")` → returns CUID `clndStudent`
-3. `db.user.findFirst({ where: { id: clndStudent, coachId: coachCUID } })` verifies relationship
-4. If `coachId = coachCUID` exists → access granted
+### Connected Sources
 
-### Authorization Flow (Broken Case - ClientSelector)
+| Source | What's pulled | How |
+|---|---|---|
+| Habithletics DB | Workouts, programs, sessions, meals, activities, goals | Direct Prisma queries |
+| Discord messages | Coach↔client conversations | `Conversation` + `Message` models |
+| Coach Notes (new) | Manual observations, injuries, preferences | `ClientNote` model |
+| Client Tags (new) | Reusable labels (injury, concern, preference) | `ClientTag` + `ClientNoteTag` |
+| Questionnaire (future) | Intake responses | Reserved field in `ClientProfile` |
 
-When coach adds client via `/api/users/${coachCUID}/students`:
-1. API receives CUID `clndCoach` in URL
-2. `resolveClerkIdToDbUserId("clndCoach")` looks for user with `clerkId = "clndCoach"` → NOT FOUND
-3. Returns 404 before even checking authorization
+### What the Profile Aggregates
 
-## Solution
+- **Progress snapshot:** recent workout sessions, program assignments, activity streaks
+- **Key facts:** tags (injury:ACL, prefers:barbell), pinned coach notes
+- **Conversation summary:** last 5 Discord messages with timestamps
+- **Coaching timeline:** all notes chronologically, filterable by tag
 
-### Fix 1: Update id-utils.ts to Handle Both Clerk IDs and CUIDs
+---
 
-The `resolveClerkIdToDbUserId` function should:
-- If input looks like Clerk ID (`user_` prefix) → resolve via `clerkId` field
-- If input is CUID (no `user_` prefix) → assume it's already a CUID and verify user exists
-- Return null if neither works
+## 4. Database Schema Changes (prisma/schema.prisma)
 
-### Fix 2: Ensure Consistent Clerk ID Usage in URLs
+```prisma
+// ──────────────────────────────────────────────
+// NEW: Coach Notes
+// ──────────────────────────────────────────────
 
-**Option A (Chosen):** Make `resolveClerkIdToDbUserId` robust to handle both
-- Minimizes frontend changes
-- Backend becomes more forgiving
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String   @map("client_id")        // FK → User.id
+  authorId  String   @map("author_id")        // FK → User.id (coach who wrote it)
+  content   String   @db.Text
+  noteType  String   @default("general")      // "general" | "injury" | "observation" | "goal_update" | "concern"
+  isPinned  Boolean  @default(false)          // Pinned = always visible at top
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-**Changes needed:**
-1. `lib/api/id-utils.ts` - update `resolveClerkIdToDbUserId`
-2. `app/dashboard/coaching/page.tsx` - pass Clerk ID to students endpoint
-3. `components/coach/ClientSelector.tsx` - pass Clerk ID to students endpoint
+  author   User           @relation(fields: [authorId], references: [id])
+  client   User           @relation("ClientNotes", fields: [clientId], references: [id])
+  tags     ClientNoteTag[]
 
-## Files to Modify
+  @@index([clientId, createdAt])
+  @@map("client_notes")
+}
 
-| File | Change |
-|------|--------|
-| `lib/api/id-utils.ts` | Update `resolveClerkIdToDbUserId` to handle CUIDs directly |
-| `app/dashboard/coaching/page.tsx` | Use Clerk ID (`user.id`) instead of CUID (`currentUserDbId`) in API calls |
-| `components/coach/ClientSelector.tsx` | Use Clerk ID instead of CUID for coach identification |
+model ClientTag {
+  id        String   @id @default(cuid())
+  name      String   @unique                      // e.g. "injury", "preference", "concern", "ACL", "sleep_issue"
+  color     String   @default("#888888")          // hex color for UI
+  createdAt DateTime @default(now()) @map("created_at")
 
-## Success Criteria
+  notes ClientNoteTag[]
 
-1. ✅ Coach can add clients via ClientSelector
-2. ✅ Coach can view students' activities, workouts, meals, dashboard
-3. ✅ Student can view their own data
-4. ✅ All API routes resolve IDs correctly
-5. ✅ No 403 Forbidden from ID mismatch
+  @@map("client_tags")
+}
 
-## Technical Details
+model ClientNoteTag {
+  noteId String @map("note_id")
+  tagId  String @map("tag_id")
 
-### Clerk ID Pattern
-- Format: `user_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (26 characters)
-- Source: `useUser().id` from `@clerk/nextjs`
+  note ClientNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag  ClientTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-### CUID Pattern
-- Format: `clndxxxxxxxxxxxxxxxxxxxxxxxx` (25 characters)
-- Source: `user.id` from `/api/users/me` response
-- Stored in: `db.user.id`, `db.user.coachId`, `db.organizationMember.userId`
+  @@id([noteId, tagId])
+  @@map("client_note_tags")
+}
 
-### Resolution Strategy
+// ──────────────────────────────────────────────
+// EXTEND: User model (add relations)
+// ──────────────────────────────────────────────
 
-```typescript
-async function resolveClerkIdToDbUserId(id: string): Promise<string | null> {
-  // If already a CUID (starts with 'clnd'), verify and return
-  if (id.startsWith('clnd')) {
-    const user = await db.user.findUnique({ where: { id }, select: { id: true } })
-    return user?.id ?? null
+// In User model, add:
+// notes       ClientNote[] @relation("ClientNotes")
+// (no change to existing fields — only add relations)
+```
+
+### Prisma Migration Notes
+- Run `npx prisma migrate dev --name add_client_memory_graph`
+- New tables: `client_notes`, `client_tags`, `client_note_tags`
+- No existing data affected — additive only
+
+---
+
+## 5. API Design
+
+### Base Path: `/api/clients/[clientId]/`
+
+#### `GET /api/clients/[clientId]/profile`
+Aggregate full client profile (all sources merged).
+
+**Auth:** Requester must be coach of this client (via `OrganizationMember.role ∈ {owner, trainer}` OR `User.coachId = requester.id`).
+
+**Response:**
+```ts
+{
+  client: { id, name, email, image }
+  progress: {
+    recentSessions: WorkoutSessionSummary[]   // last 5, with workout name + status
+    programs: ProgramAssignmentSummary[]      // active programs
+    activityStreak: { current, longest }
+    recentMeals: MealSummary[]               // last 5
+    goals: GoalSummary[]                     // active goals
   }
-  
-  // If Clerk ID (starts with 'user_'), resolve via clerkId field
-  if (id.startsWith('user_')) {
-    const user = await db.user.findFirst({ where: { clerkId: id }, select: { id: true } })
-    return user?.id ?? null
-  }
-  
-  // Unknown format
-  return null
+  notes: ClientNoteSummary[]                 // all notes, newest first
+  tags: ClientTag[]                          // all tags used on this client
+  conversations: ConversationSummary[]       // last 5 Discord messages
+  pinnedFacts: ClientNote[]                  // isPinned = true notes
 }
 ```
+
+#### `GET /api/clients/[clientId]/notes`
+List all notes for a client.
+
+**Query params:** `?tag=injury&limit=20&offset=0&type=observation`
+
+**Response:** `{ notes: ClientNote[], total: number }`
+
+#### `POST /api/clients/[clientId]/notes`
+Create a new coach note.
+
+**Body:**
+```ts
+{
+  content: string          // required, max 5000 chars
+  noteType?: string        // "general" | "injury" | "observation" | "goal_update" | "concern"
+  isPinned?: boolean
+  tags?: string[]          // tag names to apply (creates if not exists)
+}
+```
+
+**Response:** `ClientNote` object
+
+#### `PATCH /api/clients/[clientId]/notes/[noteId]`
+Update a note (author coach only).
+
+**Body:** `{ content?, noteType?, isPinned?, tags? }`
+
+#### `DELETE /api/clients/[clientId]/notes/[noteId]`
+Delete a note (author coach only).
+
+#### `GET /api/clients/[clientId]/query`
+Natural-language-style query against client data.
+
+**Query params:** `?q=How+is+Kevin+progressing`
+
+**Implementation:** Pattern-matches keywords against structured data (see Section 7). Not a full LLM query — a smart router that maps intent to structured DB queries.
+
+**Response:**
+```ts
+{
+  answer: string            // human-readable answer
+  sources: string[]         // e.g. ["workout_sessions", "client_notes"]
+  data: {}                  // structured data backing the answer
+}
+```
+
+#### `GET /api/clients/[clientId]/tags`
+List all tags used on this client.
+
+**Response:** `ClientTag[]`
+
+---
+
+## 6. File Structure (new files only)
+
+```
+ALPHA-EVOLVE/
+  SPEC.md ← this file
+
+prisma/
+  schema.prisma            ← ADD: ClientNote, ClientTag, ClientNoteTag models
+
+app/
+  api/
+    clients/
+      [clientId]/
+        profile/
+          route.ts         ← GET aggregated profile
+        notes/
+          route.ts         ← GET list, POST create
+          [noteId]/
+            route.ts       ← PATCH update, DELETE
+        query/
+          route.ts         ← GET natural-language query
+        tags/
+          route.ts         ← GET client tags
+
+components/
+  coach/
+    coach-notes-panel.tsx   ← Sidebar: list + quick-add notes
+    client-profile-card.tsx ← Hero card: key facts + tags
+    query-interface.tsx     ← "Ask about this client" chat UI
+    note-editor.tsx         ← Note creation/editing form
+    tag-badge.tsx           ← Colored tag pill
+    client-memory-graph.tsx ← Main panel layout assembling above
+
+app/
+  trainer/
+    clients/
+      [id]/
+        page.tsx            ← ENHANCED: tabs now include "Memory" tab
+```
+
+### All new files are isolated — zero modifications to existing files outside the trainer client detail page (which gets a new tab added).
+
+---
+
+## 7. Query Interface — Smart Keyword Router
+
+Not a full LLM. A pattern-matching query router:
+
+| Query pattern | Maps to | Response |
+|---|---|---|
+| `progress`, `how is`* progressing | `workoutSessions` + `goals` | Summary of recent activity |
+| `injury`, `pain`, `hurt` | Filter notes by `noteType=injury` | List of injury-related notes |
+| `concern`, `worry`, `issue` | Filter notes by `noteType=concern` | List of flagged concerns |
+| `goals`, `what are.*goals` | `goals` table | Active goals |
+| `recent`, `last`* | `workoutSessions` last 5 | Session list |
+| `sleep`, `nutrition`, `diet` | Tag search `ClientNoteTag` | Notes tagged with these |
+| `everything`, `summary` | Full profile | Complete profile snapshot |
+
+**Fallback:** If no pattern matches, return: "I didn't understand that. Try asking about progress, injuries, goals, or concerns."
+
+**Extensibility:** Each pattern is a function in `lib/jarvis/query-router.ts` — can add more patterns without touching the API route.
+
+---
+
+## 8. Component Specifications
+
+### `coach-notes-panel.tsx`
+- **Props:** `clientId: string, clientName: string`
+- **Features:**
+  - Scrollable note list (newest first), grouped by date
+  - Each note shows: author avatar, content preview (truncated 120 chars), type badge, tags, pin indicator, time ago
+  - Click to expand full note inline
+  - "Add Note" button → opens `note-editor.tsx` as inline form at top
+  - Filter pills: All | Injury | Concern | Observation | Pinned
+  - Real-time: fetches on mount, mutations invalidate + refetch
+
+### `client-profile-card.tsx`
+- **Props:** `profile: ClientProfile` (from `/api/clients/[clientId]/profile`)
+- **Features:**
+  - Client avatar + name + email header
+  - Pinned facts section (pinned notes as collapsible items)
+  - Tag cloud: all tags with colors
+  - Quick stats: current streak, active programs, last session date
+  - "Ask about this client" button → opens `query-interface.tsx`
+
+### `query-interface.tsx`
+- **Props:** `clientId: string`
+- **Features:**
+  - Single input field with placeholder: "Ask about this client..."
+  - Submit on Enter
+  - Answer displayed as a styled card below input
+  - "Sources" shown as small badges
+  - Loading state while fetching
+  - Empty state when no query yet
+
+### `note-editor.tsx`
+- **Props:** `clientId: string, note?: ClientNote, onSave: () => void, onCancel: () => void`
+- **Features:**
+  - Textarea (min 3 rows, max 20)
+  - Note type selector (radio buttons styled as pills)
+  - Tag multi-select (existing tags shown, type to create new)
+  - Pin toggle
+  - Save / Cancel buttons
+  - Inline validation (content required, max 5000 chars)
+
+### `tag-badge.tsx`
+- **Props:** `tag: ClientTag, size?: "sm" | "md", onRemove?: () => void`
+- **Features:**
+  - Colored dot + tag name
+  - Optional X button for removal
+  - Sizes: sm (text-xs) / md (text-sm)
+
+### `client-memory-graph.tsx`
+- **Props:** `clientId: string, clientName: string`
+- **Layout:** Two-column on desktop, stacked on mobile
+  - **Left:** `client-profile-card.tsx` (fixed width ~340px)
+  - **Right:** Tabbed area — Notes | Query | Progress
+- **Behavior:** All sections load independently via their own API calls
+
+### Enhanced `trainer/clients/[id]/page.tsx`
+- Add new tab: **"Memory"**
+- Renders `<ClientMemoryGraph clientId={id} clientName={...} />`
+- All other tabs remain unchanged
+
+---
+
+## 9. Auth & Authorization
+
+- All `/api/clients/[clientId]/` routes check:
+  1. User is authenticated (via `requireAuth()`)
+  2. User is in same organization as client with role `owner | trainer`; OR
+  3. User is the client's coach (`client.coachId === user.id`)
+- Return `403 Forbidden` if neither condition holds
+- Notes can only be edited/deleted by their author (`authorId === user.id`)
+
+---
+
+## 10. Implementation Phases
+
+### Phase 1: Foundation
+- Add Prisma models + migrate
+- `GET /api/clients/[clientId]/profile` route
+- `GET|POST /api/clients/[clientId]/notes` route
+- `PATCH|DELETE /api/clients/[clientId]/notes/[noteId]` route
+
+### Phase 2: UI Shell
+- `coach-notes-panel.tsx` (read-only list)
+- `note-editor.tsx`
+- Enhanced trainer client detail page with Memory tab
+
+### Phase 3: Query Interface
+- `query-interface.tsx`
+- `GET /api/clients/[clientId]/query` route + query router lib
+
+### Phase 4: Polish
+- `client-profile-card.tsx` with pinned facts
+- Tag management (`GET /api/clients/[clientId]/tags`)
+- `client-memory-graph.tsx` full layout
+- Loading skeletons, error boundaries
+
+---
+
+## 11. What's NOT in Scope
+
+- Full LLM/NLP query processing (no OpenAI/Anthropic calls in v1)
+- RAG pipeline
+- Client-facing UI (coach-only feature)
+- Discord message fetching from external API (uses existing DB Conversation model)
+- Questionnaire intake integration (reserved for future)
+- Modifying existing workout/meal/activity CRUD
+
+---
+
+## 12. Technology Choices
+
+- **Framework:** Next.js 14 App Router (existing)
+- **Database:** PostgreSQL via existing Prisma setup
+- **Auth:** Existing `requireAuth()` helper (Clerk)
+- **Styling:** Existing shadcn/ui component library
+- **State:** React `useState`/`useEffect` (no additional state lib needed)
+- **Data fetching:** Native `fetch` with Next.js server components where appropriate
+- **No new dependencies** — only Prisma schema changes

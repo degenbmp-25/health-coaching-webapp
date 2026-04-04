@@ -53,7 +53,57 @@ model User {
   programAssignments      ProgramAssignment[]  @relation("ClientPrograms")
   sheetConnections        SheetConnection[]   @relation("SheetConnections")
   
+  // Coach Notes - author is the coach who wrote notes
+  notes  ClientNote[] @relation("ClientNotes")
+  
+  // Coach Notes - client is the person the notes are about
+  clientNotes ClientNote[] @relation("ClientNotesAbout")
+  
   @@map(name: "users")
+}
+
+// ──────────────────────────────────────────────
+// Coach Notes / Client Memory Graph
+// ──────────────────────────────────────────────
+
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String   @map("client_id")        // FK → User.id (person notes are about)
+  authorId  String   @map("author_id")         // FK → User.id (coach who wrote it)
+  content   String   @db.Text
+  noteType  String   @default("general")      // "general" | "injury" | "observation" | "goal_update" | "concern"
+  isPinned  Boolean  @default(false)          // Pinned = always visible at top
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author User           @relation("ClientNotes", fields: [authorId], references: [id])
+  client User           @relation("ClientNotesAbout", fields: [clientId], references: [id])
+  tags   ClientNoteTag[]
+
+  @@index([clientId, createdAt])
+  @@map("client_notes")
+}
+
+model ClientTag {
+  id        String   @id @default(cuid())
+  name      String   @unique                      // e.g. "injury", "preference", "concern", "ACL", "sleep_issue"
+  color     String   @default("#888888")           // hex color for UI
+  createdAt DateTime @default(now()) @map("created_at")
+
+  notes ClientNoteTag[]
+
+  @@map("client_tags")
+}
+
+model ClientNoteTag {
+  noteId String @map("note_id")
+  tagId  String @map("tag_id")
+
+  note ClientNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag  ClientTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+  @@map("client_note_tags")
 }
 
 model Goal {
