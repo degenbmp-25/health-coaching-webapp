@@ -102,7 +102,7 @@ export async function GET(
     }
 
     // ── Build typed query ────────────────────────────────────────────────────
-    const where: Parameters<typeof db.clientNote.findMany>[0]["where"] = {
+    const where = {
       clientId,
     }
 
