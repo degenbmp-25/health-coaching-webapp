@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-utils"
 
@@ -102,7 +103,7 @@ export async function GET(
     }
 
     // ── Build typed query ────────────────────────────────────────────────────
-    const where = {
+    const where: Prisma.ClientNoteWhereInput = {
       clientId,
     }
 
