@@ -84,7 +84,7 @@ export function NoteEditor({
 
     try {
       const url = isEditing
-        ? `/api/clients/${clientId}/notes/${note.id}`
+        ? `/api/clients/${clientId}/notes/${note!.id}`
         : `/api/clients/${clientId}/notes`
 
       const res = await fetch(url, {
