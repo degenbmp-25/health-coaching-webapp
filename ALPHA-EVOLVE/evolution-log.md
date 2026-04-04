@@ -1,6 +1,6 @@
 # Evolution Log - Clerk ID Standardization
 
-## Loop 1: Initial Fix (COMPLETED)
+## Loop 1: Initial Fix (COMPLETED - April 2, 2026)
 
 ### Changes Made
 
@@ -22,9 +22,27 @@
    - `addAsClient` now uses `user?.id` (Clerk ID) for API calls
    - Fixed TypeScript null check for `user?.id`
 
-## Verification - April 2, 2026
+## Verification - April 4, 2026
 
-### Authorization Flow (Verified Correct)
+### Status Check
+- ✅ Build passes (April 4, 2026)
+- ✅ All API routes use `resolveClerkIdToDbUserId`
+- ✅ Frontend components use Clerk IDs correctly
+- ✅ New commits (Mux health check) did not affect Clerk ID handling
+
+### API Routes Using resolveClerkIdToDbUserId
+
+| Endpoint | Status |
+|----------|--------|
+| `/api/users/[userId]/students` | ✓ Fixed |
+| `/api/users/[userId]/activities` | ✓ Has resolution |
+| `/api/users/[userId]/workouts` | ✓ Has resolution |
+| `/api/users/[userId]/dashboard` | ✓ Has resolution |
+| `/api/users/[userId]/meals` | ✓ Has resolution |
+| `/api/users/[userId]/goals` | ✓ Has resolution |
+| `/api/users/[userId]/coach` | ✓ Has resolution |
+
+## Authorization Flow (Verified Correct)
 
 **Coach Adds Client:**
 ```
@@ -47,32 +65,6 @@ StudentDataDashboard fetches /api/users/${studentClerkId}/dashboard
   → verify coach has org membership ✓
   → getDashboardData(studentCUID) ✓
 ```
-
-**Coach Views Student Meals:**
-```
-StudentDataDashboard fetches /api/users/${studentClerkId}/meals
-  → requireAuth() returns coach with coachCUID
-  → resolveClerkIdToDbUserId(studentClerkId) → studentCUID ✓
-  → currentUser.id !== targetDbUserId (coachCUID !== studentCUID)
-  → verify db.user(coachId = coachCUID) exists ✓
-  → get meals where userId = studentCUID ✓
-```
-
-## API Routes Using resolveClerkIdToDbUserId
-
-| Endpoint | Status |
-|----------|--------|
-| `/api/users/[userId]/students` | ✓ Fixed |
-| `/api/users/[userId]/activities` | ✓ Has resolution |
-| `/api/users/[userId]/workouts` | ✓ Has resolution |
-| `/api/users/[userId]/dashboard` | ✓ Has resolution |
-| `/api/users/[userId]/meals` | ✓ Has resolution |
-| `/api/users/[userId]/goals` | ✓ Has resolution |
-| `/api/users/[userId]/coach` | ✓ Has resolution |
-
-## Build Status
-
-✅ **Build passes** - April 2, 2026
 
 ## Deployment
 
