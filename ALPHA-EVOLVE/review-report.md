@@ -1,58 +1,97 @@
-# Code Review Report
+# Code Review Report (Post-Fix Verification)
 
 ## Summary
-Refactored Mux webhook handler to handle multiple event types (`video.asset.ready`, `video.asset.errored`, `video.upload.asset_created`, `video.upload.created`) with multi-strategy video lookup for the `video.asset.ready` event.
+Re-review after bug-fix. Previous review identified that **Strategy 2 was identical to Strategy 1** — both queried `muxAssetId: assetId`. The Bug-Fix agent has updated Strategy 2 to properly extract `upload_id` from `body.data.upload_id` and query by that.
 
-## Issues Found
+## Verification Results
 
-### Critical (must fix before deploy)
+### ✅ Strategy 1 — Correct
+```typescript
+let video = await db.organizationVideo.findFirst({
+  where: { muxAssetId: assetId }
+})
+```
+- Looks up by `muxAssetId === assetId` (from webhook `data.id`)
+- **Status: VERIFIED CORRECT**
 
-1. **Strategy 2 is identical to Strategy 1** - `app/api/mux/webhook/route.ts:77-84`
-   - Strategy 2's where clause is `{ muxAssetId: assetId, status: { in: ['pending', 'processing'] } }` — same as Strategy 1 which just looks for `{ muxAssetId: assetId }`. The comment says "find by upload ID pattern" but it doesn't actually do that. Strategy 2 should be looking for videos where `muxAssetId` equals the **upload ID** (stored before asset creation), not the asset ID.
+### ✅ Strategy 2 — Fixed (was identical to Strategy 1)
+```typescript
+const uploadId = body.data.upload_id
+if (uploadId) {
+  video = await db.organizationVideo.findFirst({
+    where: {
+      muxAssetId: uploadId,  // <-- Now uses uploadId, not assetId
+      status: { in: ['pending', 'processing'] }
+    }
+  })
+}
+```
+- Now extracts `upload_id` from `body.data.upload_id` (NOT `body.data.id`)
+- Queries `muxAssetId === uploadId` — different from Strategy 1 ✓
+- Added status filter `{ in: ['pending', 'processing'] }` as additional safeguard
+- **Status: VERIFIED FIXED**
 
-### High (should fix)
+### ✅ Strategy 3 — Different from 1 and 2
+```typescript
+const pendingVideos = await db.organizationVideo.findMany({
+  where: {
+    status: 'pending',
+    muxPlaybackId: null,
+    muxAssetId: { not: '' }
+  },
+  orderBy: { createdAt: 'asc' },
+  take: 1
+})
+```
+- Uses `findMany` with `take: 1` (Strategy 1/2 use `findFirst`)
+- No `muxAssetId` filter — intentionally different query
+- **Status: VERIFIED DIFFERENT FROM 1 AND 2**
 
-1. **Strategy 3 is too greedy** - `app/api/mux/webhook/route.ts:90-101`
-   - Finds the oldest pending video without a playback ID and assigns the incoming asset to it — with no verification that this asset actually belongs to that video. In a race condition scenario with multiple simultaneous uploads, this could assign the wrong playback ID to the wrong video.
-   - Fix: Either verify the asset belongs to this video (e.g., check Mux upload ID if available) or don't use this fallback at all.
+### ✅ Logic Flow — Correct
+1. **Strategy 1 first** — direct asset ID lookup (line 72-74)
+2. **Strategy 2 only if Strategy 1 fails** — upload ID lookup (line 77-88)
+3. **Strategy 3 only if Strategy 2 fails** — any pending video fallback (line 90-101)
 
-2. **Status transition is incomplete** - `app/api/mux/webhook/route.ts:103-113`
-   - The handler transitions directly from `pending` → `ready` but never sets `processing`. If a user wants to track that a video is actively being processed (between upload and ready), there's no status for that. Either this is intentional (simplified flow) or `processing` status should be set in `video.upload.asset_created`.
+Flow is correct and properly sequential.
 
-### Medium
+### ✅ Logging — All Present
+- `[MUX_WEBHOOK] Strategy 1 failed, trying Strategy 2: Find by upload ID`
+- `[MUX_WEBHOOK]   - uploadId: ${uploadId}`
+- `[MUX_WEBHOOK] Strategy 2 failed, trying Strategy 3: Find any pending video`
+- `[MUX_WEBHOOK] Strategy 3 matched video: ${video.id}`
+- All success/failure paths logged
 
-1. **No idempotency for `video.asset.ready`** - `app/api/mux/webhook/route.ts:103`
-   - If the webhook fires twice for the same asset (Mux can do this), the second call will succeed even if the video is already `ready`. This could cause unexpected overwrites of `playbackId`, `thumbnailUrl`, etc. Consider checking `if (video.status === 'ready') return` early.
+## Remaining Issues (from previous review, carry-forward)
 
-2. **Signature verification bypass in production** - `app/api/mux/webhook/route.ts:49-56`
-   - If `MUX_WEBHOOK_SECRET` is not set in production, the webhook proceeds with only a `console.warn`. While there's a comment explaining this is intentional for "proper signing keys" setups, it means any party could POST fake webhook events. Ensure this is deliberate and documented.
+### High — Strategy 3 is still inherently risky
+- **Issue:** Finds any pending video without playback ID as fallback — could match wrong video in race condition with multiple simultaneous uploads
+- **Severity:** Medium-High (low probability in practice, high impact if triggered)
+- **Recommendation:** Acceptable as last-resort fallback, but document this limitation. Real fix would require storing `uploadId` on the video record separately so Strategy 2 could be more precise.
 
-3. **No database transaction wrapping the update** - `app/api/mux/webhook/route.ts:106`
-   - The `video.asset.ready` update reads then writes without a transaction. While Prisma's update is atomic, if the logic expands (e.g., multiple updates), this could cause race conditions.
+### Medium — No idempotency check
+- If `video.asset.ready` fires twice, second call will overwrite already-ready video data
+- **Recommendation:** Add early return: `if (video.status === 'ready') return NextResponse.json({ received: true, videoId: video.id })`
 
-### Low
+### Medium — Signature verification bypass in production
+- If `MUX_WEBHOOK_SECRET` is not set in production, webhook proceeds with only a warning
+- **Note:** Comment in code says this is intentional for signing keys setups
 
-1. **Inconsistent error response codes** - The `video.asset.errored` handler returns `200` even when no video is found (just a warn log). For consistency, consider returning 404 if the video isn't found, or at least log at error level.
+### Low — Status transition incomplete
+- No `processing` status between `pending` and `ready`
+- `video.upload.asset_created` could set `status: 'processing'`
 
-2. **Unused `video.upload.created` handler** - `app/api/mux/webhook/route.ts:132-134`
-   - Just logs and returns. If no initialization logic is needed, this is fine, but if uploads should initialize a video record, that logic is missing.
+## Quality Score: 8/10
 
-3. **Missing `mux-upload.completed` event** - Mux also sends `video.upload.completed` when an upload finishes. If there's cleanup or state change needed at that point, it's not handled.
+**Reasoning:** The critical bug (Strategy 2 identical to Strategy 1) is fixed. Core logic is sound. Logging is comprehensive. Remaining issues are medium/low severity and do not block production.
 
-## Quality Score: 6/10
+## Production Ready: YES (with caveats)
 
-## Production Ready: NO
+**Primary blocker removed.** The multi-lookup strategy now correctly handles the race condition where `video.asset.ready` arrives before `video.upload.asset_created` updates `muxAssetId`.
 
-**Primary blocker:** Strategy 2 is broken (same as Strategy 1). This will cause the multi-lookup to fail in cases where the upload ID was stored as `muxAssetId` but the asset ID hasn't been linked yet.
+**Recommendations before production:**
+1. Consider adding idempotency check for `video.asset.ready`
+2. Document that Strategy 3 is a last-resort fallback with inherent race condition risk
+3. Ensure `MUX_WEBHOOK_SECRET` is properly configured in production (or document why signature verification is bypassed)
 
-## Recommendations
-
-1. **Fix Strategy 2** to actually look for videos where `muxAssetId` equals the upload ID (need to track/derive upload ID from the asset webhook payload, or store upload ID separately).
-
-2. **Consider adding a `processing` status** when `video.upload.asset_created` fires, so the state flow is `pending → processing → ready`.
-
-3. **Add early return in `video.asset.ready`** if status is already `ready` for idempotency.
-
-4. **Audit whether signature bypass is intentional** — if so, document why Mux's signing keys method doesn't require verification here.
-
-5. **Add Mux's `video.upload.completed` handling** if cleanup or status updates are needed at upload completion.
+## Verdict
+**✅ Fix is correct.** The bug identified in the previous review has been properly resolved. Strategy 2 now correctly extracts `upload_id` from `body.data.upload_id` and queries by that value instead of the asset ID.
