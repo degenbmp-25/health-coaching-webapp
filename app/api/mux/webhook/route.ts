@@ -86,19 +86,22 @@ export async function POST(request: NextRequest) {
         where: { muxAssetId: assetId }
       })
 
-      // Strategy 2: If not found, look for pending videos where muxAssetId might be the upload ID
-      // (handles race condition where video.asset.ready arrives before video.upload.asset_created)
+      // Strategy 2: If not found, look for pending videos where muxAssetId is the upload ID
+      // (handles race condition where video.asset.ready arrives before video.upload.asset_created updates muxAssetId)
       if (!video) {
-        console.log('[MUX_WEBHOOK] Strategy 1 failed, trying Strategy 2: Find by upload ID pattern')
+        console.log('[MUX_WEBHOOK] Strategy 1 failed, trying Strategy 2: Find by upload ID')
         
-        // Look for any pending/processing video in the organization that might match
-        // We try to find by looking for videos that don't have playbackId yet and are pending
-        video = await db.organizationVideo.findFirst({
-          where: {
-            muxAssetId: assetId,
-            status: { in: ['pending', 'processing'] }
-          }
-        })
+        const uploadId = body.data.upload_id
+        if (uploadId) {
+          console.log(`[MUX_WEBHOOK]   - uploadId: ${uploadId}`)
+          // Look for video where muxAssetId matches the upload ID (not the asset ID)
+          video = await db.organizationVideo.findFirst({
+            where: {
+              muxAssetId: uploadId,
+              status: { in: ['pending', 'processing'] }
+            }
+          })
+        }
       }
 
       // Strategy 3: Last resort - find any pending video without a playback ID

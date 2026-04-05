@@ -1,86 +1,58 @@
-# Review Report - Clerk ID Standardization
+# Code Review Report
 
-## Files Reviewed
-
-1. `lib/api/id-utils.ts` - Updated
-2. `app/dashboard/coaching/page.tsx` - Updated
-3. `components/coach/ClientSelector.tsx` - Updated
-4. `app/api/users/[userId]/dashboard/route.ts` - Already had fix
-5. `app/api/users/[userId]/activities/route.ts` - Already had fix
-6. `app/api/users/[userId]/workouts/route.ts` - Already had fix
-7. `app/api/users/[userId]/meals/route.ts` - Already had fix
+## Summary
+Refactored Mux webhook handler to handle multiple event types (`video.asset.ready`, `video.asset.errored`, `video.upload.asset_created`, `video.upload.created`) with multi-strategy video lookup for the `video.asset.ready` event.
 
 ## Issues Found
 
-### HIGH Priority
+### Critical (must fix before deploy)
 
-None - all high priority issues were already addressed in previous loops.
+1. **Strategy 2 is identical to Strategy 1** - `app/api/mux/webhook/route.ts:77-84`
+   - Strategy 2's where clause is `{ muxAssetId: assetId, status: { in: ['pending', 'processing'] } }` — same as Strategy 1 which just looks for `{ muxAssetId: assetId }`. The comment says "find by upload ID pattern" but it doesn't actually do that. Strategy 2 should be looking for videos where `muxAssetId` equals the **upload ID** (stored before asset creation), not the asset ID.
 
-### MEDIUM Priority
+### High (should fix)
 
-None.
+1. **Strategy 3 is too greedy** - `app/api/mux/webhook/route.ts:90-101`
+   - Finds the oldest pending video without a playback ID and assigns the incoming asset to it — with no verification that this asset actually belongs to that video. In a race condition scenario with multiple simultaneous uploads, this could assign the wrong playback ID to the wrong video.
+   - Fix: Either verify the asset belongs to this video (e.g., check Mux upload ID if available) or don't use this fallback at all.
 
-### LOW Priority (Pre-existing)
+2. **Status transition is incomplete** - `app/api/mux/webhook/route.ts:103-113`
+   - The handler transitions directly from `pending` → `ready` but never sets `processing`. If a user wants to track that a video is actively being processed (between upload and ready), there's no status for that. Either this is intentional (simplified flow) or `processing` status should be set in `video.upload.asset_created`.
 
-1. **ESLint Warning**: `img` elements without alt props in:
-   - `app/admin/organizations/[id]/page.tsx:127`
-   - `app/trainer/clients/[id]/page.tsx:109`
-   - `app/trainer/clients/page.tsx:115`
+### Medium
 
-2. **React Hook Warning**: `useEffect` missing dependency `fetchTodaysActivitiesAndLogs` in:
-   - `components/pages/dashboard/todays-activities.tsx:40`
+1. **No idempotency for `video.asset.ready`** - `app/api/mux/webhook/route.ts:103`
+   - If the webhook fires twice for the same asset (Mux can do this), the second call will succeed even if the video is already `ready`. This could cause unexpected overwrites of `playbackId`, `thumbnailUrl`, etc. Consider checking `if (video.status === 'ready') return` early.
 
-3. **Static Generation Warning**: Cron routes using `headers` or `request.url` - expected behavior for dynamic API routes.
+2. **Signature verification bypass in production** - `app/api/mux/webhook/route.ts:49-56`
+   - If `MUX_WEBHOOK_SECRET` is not set in production, the webhook proceeds with only a `console.warn`. While there's a comment explaining this is intentional for "proper signing keys" setups, it means any party could POST fake webhook events. Ensure this is deliberate and documented.
 
-## Authorization Flow Verification
+3. **No database transaction wrapping the update** - `app/api/mux/webhook/route.ts:106`
+   - The `video.asset.ready` update reads then writes without a transaction. While Prisma's update is atomic, if the logic expands (e.g., multiple updates), this could cause race conditions.
 
-### Coach Adds Client
-```
-ClientSelector.addAsClient(userId)
-  → POST /api/users/${coachClerkId}/students
-    → requireAuth() returns coach with coachCUID
-    → resolveClerkIdToDbUserId(coachClerkId) → coachCUID ✓
-    → verify coach is owner/trainer/coach ✓
-    → verify user.id === targetDbUserId (coach accessing own) ✓
-    → POST body has clientCUID
-    → resolveClerkIdToDbUserId(clientCUID) → studentCUID ✓
-    → update student.coachId = coachCUID ✓
-```
+### Low
 
-### Coach Views Student Dashboard
-```
-StudentDataDashboard fetches /api/users/${studentClerkId}/dashboard
-  → requireAuth() returns coach with coachCUID
-  → resolveClerkIdToDbUserId(studentClerkId) → studentCUID ✓
-  → verify coach has org membership ✓
-  → getDashboardData(studentCUID) ✓
-```
+1. **Inconsistent error response codes** - The `video.asset.errored` handler returns `200` even when no video is found (just a warn log). For consistency, consider returning 404 if the video isn't found, or at least log at error level.
 
-### Coach Views Student Meals
-```
-StudentDataDashboard fetches /api/users/${studentClerkId}/meals
-  → requireAuth() returns coach with coachCUID
-  → resolveClerkIdToDbUserId(studentClerkId) → studentCUID ✓
-  → currentUser.id !== targetDbUserId (coachCUID !== studentCUID)
-  → verify db.user(coachId = coachCUID) exists ✓
-  → get meals where userId = studentCUID ✓
-```
+2. **Unused `video.upload.created` handler** - `app/api/mux/webhook/route.ts:132-134`
+   - Just logs and returns. If no initialization logic is needed, this is fine, but if uploads should initialize a video record, that logic is missing.
 
-## Quality Gates: PASSED
+3. **Missing `mux-upload.completed` event** - Mux also sends `video.upload.completed` when an upload finishes. If there's cleanup or state change needed at that point, it's not handled.
 
-- [x] All CRITICAL issues resolved
-- [x] All HIGH issues resolved  
-- [x] Build passes
-- [x] TypeScript compiles
-- [x] No new regressions introduced
+## Quality Score: 6/10
 
-## Remaining Work
+## Production Ready: NO
 
-1. Fix pre-existing ESLint warnings (img alt tags)
-2. Fix pre-existing React Hook dependency warning
-3. Consider adding integration tests for the coaching flow
+**Primary blocker:** Strategy 2 is broken (same as Strategy 1). This will cause the multi-lookup to fail in cases where the upload ID was stored as `muxAssetId` but the asset ID hasn't been linked yet.
 
-## Deployment
+## Recommendations
 
-Committed and pushed to `feature/video-selector-for-exercises`.
-Deployed to Vercel production.
+1. **Fix Strategy 2** to actually look for videos where `muxAssetId` equals the upload ID (need to track/derive upload ID from the asset webhook payload, or store upload ID separately).
+
+2. **Consider adding a `processing` status** when `video.upload.asset_created` fires, so the state flow is `pending → processing → ready`.
+
+3. **Add early return in `video.asset.ready`** if status is already `ready` for idempotency.
+
+4. **Audit whether signature bypass is intentional** — if so, document why Mux's signing keys method doesn't require verification here.
+
+5. **Add Mux's `video.upload.completed` handling** if cleanup or status updates are needed at upload completion.
