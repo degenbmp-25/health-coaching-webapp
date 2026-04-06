@@ -15,22 +15,24 @@ interface TrainerLayoutProps {
 export default async function TrainerLayout({ children }: TrainerLayoutProps) {
   const user = await getCurrentUser()
 
-  let canAccessTrainer = false
-  if (user) {
-    try {
-      const membership = await db.organizationMember.findFirst({
-        where: {
-          userId: user.id,
-          role: { in: ["owner", "trainer"] },
-        },
-        select: { role: true },
-      })
-      canAccessTrainer = Boolean(membership)
-    } catch (error) {
-      console.error("Error checking trainer access:", error)
-      canAccessTrainer = true
-    }
-  }
+  // TEMP BYPASS FOR DEMO - Always show trainer UI
+  let canAccessTrainer = true
+  // ORIGINAL CODE (commented out for demo):
+  // if (user) {
+  //   try {
+  //     const membership = await db.organizationMember.findFirst({
+  //       where: {
+  //         userId: user.id,
+  //         role: { in: ["owner", "trainer"] },
+  //       },
+  //       select: { role: true },
+  //     })
+  //     canAccessTrainer = Boolean(membership)
+  //   } catch (error) {
+  //     console.error("Error checking trainer access:", error)
+  //     canAccessTrainer = true
+  //   }
+  // }
 
   const mobileLinks = canAccessTrainer
     ? [...dashboardLinks.data, ...trainerLinks.data]
