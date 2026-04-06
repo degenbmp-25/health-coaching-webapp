@@ -80,15 +80,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
 
   useEffect(() => {
     async function load() {
-      const userRes = await fetch('/api/users/me')
-      if (!userRes.ok) {
-        // Auth failed - for demo, just continue without user
-        // TEMP BYPASS FOR DEMO - Clerk auth is broken
-        setLoading(false)
-        return
-      }
-      const currentUser = await userRes.json()
-      setUser(currentUser)
+      // TEMP BYPASS FOR DEMO - Skip auth check, Clerk auth is broken
+      // const userRes = await fetch('/api/users/me')
+      // if (!userRes.ok) {
+      //   router.push("/signin")
+      //   return
+      // }
+      // const currentUser = await userRes.json()
+      // setUser(currentUser)
 
       const res = await fetch(`/api/programs/${id}`)
       if (!res.ok) {
