@@ -408,9 +408,9 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openEditWeekDialog(workout)}
+                          onClick={() => router.push(`/dashboard/workouts/${workout.id}/edit`)}
                         >
-                          Edit Week
+                          Edit
                         </Button>
                         <Button
                           variant="ghost"

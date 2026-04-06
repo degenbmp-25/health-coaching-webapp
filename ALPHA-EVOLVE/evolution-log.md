@@ -275,3 +275,53 @@ While the root cause is configuration, I can implement:
 2. Add status refresh endpoint to check Mux API directly
 
 Let me implement these improvements:
+
+## Loop N+1: Workout Edit UX Fix (April 6, 2026)
+
+### Issue
+Trainers could not edit workout details from the Programs screen (`/trainer/programs/[id]`). The only edit option available was "Edit Week" which only allowed changing week/day assignment. Full workout editing (name, exercises, videos) was only available from `/dashboard/workouts/[workoutId]/edit` - which is the CLIENT-facing workouts screen.
+
+### Root Cause Analysis
+
+1. **Programs screen (`/trainer/programs/[id]`)**: Shows workouts in a program with "Edit Week" button → only allows changing week number and day of week
+2. **Workout operations component**: `WorkoutOperations` has "Edit" button that navigates to `/dashboard/workouts/${workout.id}/edit`
+3. **Workout edit page (`/dashboard/workouts/[workoutId]/edit`)**: Server component that properly checks authorization via `getWorkout()` - allows trainers to edit if they have org membership
+
+The issue is architectural: the Programs screen was designed for program management (adding/removing/reordering workouts) rather than workout content editing. The "Edit" button on the Programs screen only had "Edit Week" which was sufficient for scheduling but not for editing workout content.
+
+### Solution Implemented
+
+**File changed:** `app/trainer/programs/[id]/page.tsx`
+
+Changed the "Edit Week" button to "Edit" and made it navigate to the full workout edit page:
+
+```tsx
+// Before:
+<Button variant="outline" size="sm" onClick={() => openEditWeekDialog(workout)}>
+  Edit Week
+</Button>
+
+// After:
+<Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/workouts/${workout.id}/edit`)}>
+  Edit
+</Button>
+```
+
+### Authorization Verification
+
+The workout edit page (`/dashboard/workouts/[workoutId]/edit`) calls `getWorkout(workoutId, user.id)` which checks:
+1. Direct ownership (`userId === authorizedUserId`)
+2. Coach-student relationship
+3. **Organization membership (owner/trainer role)** ← This is how trainers are authorized
+
+So trainers can already access and edit workouts in their organization via `/dashboard/workouts/[workoutId]/edit`. The Programs screen just needed to link there instead of to the limited "Edit Week" dialog.
+
+### Files Modified
+- `app/trainer/programs/[id]/page.tsx` - Changed "Edit Week" button to "Edit" linking to full workout edit page
+
+### Verification
+- Deploy to Vercel
+- Log in as trainer
+- Go to `/trainer/programs` → click Manage on a program
+- Click "Edit" on any workout
+- Should navigate to `/dashboard/workouts/[workoutId]/edit` with full editing capability
