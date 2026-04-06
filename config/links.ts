@@ -60,3 +60,28 @@ export const dashboardLinks: Navigation = {
     },
   ],
 } as const
+
+export const trainerLinks: Navigation = {
+  data: [
+    {
+      title: "Programs",
+      href: "/trainer/programs",
+      icon: "target",
+    },
+    {
+      title: "Clients",
+      href: "/trainer/clients",
+      icon: "user",
+    },
+    {
+      title: "Videos",
+      href: "/trainer/videos",
+      icon: "play",
+    },
+    {
+      title: "Sheets",
+      href: "/trainer/sheets",
+      icon: "clock",
+    },
+  ],
+} as const
