@@ -38,7 +38,7 @@ export default function SignInPage() {
               },
             }}
             signUpUrl="/signup"
-            afterSignInUrl="/dashboard"
+            afterSignInUrl="/trainer/programs"
           />
         </div>
       </div>

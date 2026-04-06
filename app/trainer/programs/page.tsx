@@ -37,17 +37,21 @@ export default function TrainerProgramsPage() {
 
   useEffect(() => {
     async function load() {
-      const userRes = await fetch("/api/users/me")
-      if (!userRes.ok) {
-        router.push("/signin")
-        return
-      }
-      const currentUser = await userRes.json()
-      if (!currentUser) {
-        router.push("/signin")
-        return
-      }
-      setUser(currentUser)
+      // TEMP BYPASS FOR DEMO - skip auth check
+      // const userRes = await fetch("/api/users/me")
+      // if (!userRes.ok) {
+      //   router.push("/signin")
+      //   return
+      // }
+      // const currentUser = await userRes.json()
+      // if (!currentUser) {
+      //   router.push("/signin")
+      //   return
+      // }
+      // setUser(currentUser)
+      
+      // For demo, use mock user
+      setUser({ id: "demo", name: "Demo User", email: "demo@example.com" })
 
       // Fetch organizations
       const orgRes = await fetch("/api/organizations")
