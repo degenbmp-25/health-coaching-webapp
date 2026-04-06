@@ -73,5 +73,15 @@ export const trainerLinks: Navigation = {
       href: "/trainer/clients",
       icon: "user",
     },
+    {
+      title: "Videos",
+      href: "/trainer/videos",
+      icon: "play",
+    },
+    {
+      title: "Sheets",
+      href: "/trainer/sheets",
+      icon: "sheet",
+    },
   ],
 } as const
