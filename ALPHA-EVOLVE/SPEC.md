@@ -1,282 +1,176 @@
-# SPEC.md — Google Sheets Live Workout Integration
+# SPEC.md — Trainer Program Page Workout Editor Enhancement
 
 ## Project: habithletics-redesign-evolve
-## Phase: Alpha-Evolve Loop 2 (Architect → Builder → Reviewer → Evolve)
+## Loop: Alpha-Evolve — Enhanced Programs Page Workout Editor
 
 ---
 
-## 1. Overview
+## 1. Problem Statement
 
-Integrate the Google Sheets-based live workout page from `habithletics-evolve` into `habithletics-redesign-evolve`. The target page (`app/dashboard/workouts/page.tsx`) is currently a static workout management page backed by a database. The goal is to replace it with a live, sheets-driven workout experience that pulls workout data from a published Google Sheet CSV and logs sets to localStorage.
+The `/trainer/programs/[id]` page allows trainers to:
+- View program details
+- Add/remove workouts from program
+- Assign clients to programs
 
----
+But it does NOT allow trainers to:
+- Edit exercise details (sets, reps, weights)
+- Change exercise order within a workout
+- Assign videos to exercises
 
-## 2. Source Analysis
+Meanwhile, `/dashboard/workouts/[id]/edit` has a full workout editor, but it's in the "client" section. Trainers need to go there for proper editing.
 
-### habithletics-evolve (Source)
+## 2. Goal
 
-**`lib/sheets.ts`** — 4 key exports:
-- `fetchWorkouts()` → `Promise<Workout[]>` — fetches & parses published Google Sheet CSV with 10s timeout + AbortController
-- `saveLog(log)` → saves WorkoutLog to localStorage (`workout_logs` key), handles `QuotaExceededError`
-- `getLogs()` → `WorkoutLog[]` — reads from localStorage, handles corruption
-- `getLogForExercise(exerciseId, date)` → finds single log entry
-
-**`app/page.tsx`** — Full "Today's Workout" page:
-- Workout selector (A-E tabs)
-- Exercises grouped by category
-- Per-set weight/reps input fields
-- Completion tracking (progress bar + per-exercise mark-complete)
-- Video placeholder display
-- ErrorCard on failure with retry
-- WorkoutSkeleton on loading
-- AuthGuard wrapping entire page
-
-**Design:** Custom CSS with `.container`, `.header`, `.workout-selector`, `.exercise-card`, etc. — NOT using shadcn/Tailwind.
+Add robust workout editing to the trainer's Programs page (`/trainer/programs/[id]`) so trainers can fully manage workout details without leaving their context.
 
 ---
 
-### habithletics-redesign-evolve (Target)
+## 3. Existing Code Analysis
 
-**Design system:** CSS variables (HSL), Tailwind classes, shadcn/ui components, dark mode via `.dark` class.
+### `/trainer/programs/[id]/page.tsx` (Target Page)
+Current structure:
+- Displays program with workouts array
+- Each workout has `id`, `name`, `description`, `exercises[]`
+- Each exercise has `id`, `exercise.name`, `sets`, `reps`, `weight`, `order`
+- Has "Add Workouts" dialog (can add existing workouts)
+- Has "Remove" button per workout (removes from program assignment)
+- NO exercise editing capability
 
-**Existing relevant components:**
-| Component | Path | Used for |
-|---|---|---|
-| `ErrorCard` | `components/ui/error-card.tsx` | Error display with retry |
-| `WorkoutSkeleton` | `components/workout/workout-skeleton.tsx` | Loading skeleton (card-based) |
-| `WorkoutListSkeleton` | `components/workout/workout-list-skeleton.tsx` | List skeleton |
-| `Shell` | `components/layout/shell.tsx` | Page wrapper grid |
-| `DashboardHeader` | `components/pages/dashboard/dashboard-header.tsx` | Page header with actions |
-| `WorkoutSessionView` | `components/workout/workout-session-view.tsx` | Existing DB-backed session view |
-| `EmptyPlaceholder` | `components/empty-placeholder.tsx` | Empty states |
-| `Badge`, `Button`, `Card`, `Input`, `Progress` | `components/ui/*` | Core UI primitives |
-
-**Auth:** Clerk via `getCurrentUser()` in `lib/session.ts` — returns `null` if not authenticated.
-
-**Existing page pattern:** `app/dashboard/workouts/page.tsx` uses `Shell` + `DashboardHeader` + `WorkoutList` (DB-backed).
-
-**Routing:**
-- `/dashboard/workouts` → workout management list (DB)
-- `/dashboard/workouts/[workoutId]` → individual DB-backed workout session view
+### `/dashboard/workouts/[id]/edit/page.tsx` (Reference Page)
+Full workout editor with:
+- Exercise list with sets/reps/weight inputs
+- Video selector per exercise
+- Save/cancel functionality
+- API: `PATCH /api/workouts/[workoutId]` with exercise updates
 
 ---
 
-## 3. Implementation Plan
+## 4. Implementation Plan
 
-### 3.1 Copy `lib/sheets.ts`
-**Source:** `~/BeastmodeVault/vault/projects/habithletics-evolve/lib/sheets.ts`  
-**Target:** `~/BeastmodeVault/vault/projects/habithletics-redesign-evolve/lib/sheets.ts`
+### 4.1 Add Inline Workout Editing to Programs Page
 
-No modifications needed. The types (`Workout`, `Exercise`, `WorkoutLog`) are compatible with the target. The CSV parsing logic is self-contained.
+Within each workout card in `/trainer/programs/[id]`, add:
+1. **"Edit Workout" button** — expands inline editor for that workout
+2. **Exercise list** — shows each exercise with editable sets/reps/weight fields
+3. **Video selector** — per exercise, dropdown to assign video from organization_videos
+4. **Save/Cancel** — persist or discard changes
 
-### 3.2 Create `components/workout/sheets-workout-view.tsx` (NEW)
-**Purpose:** Client component that renders the live sheets-driven workout experience.
+### 4.2 Component Structure
 
-**Responsibilities:**
-- Fetch workouts via `fetchWorkouts()` on mount with 10s timeout
-- Display loading state using `WorkoutSkeleton`
-- Display error state using `ErrorCard` with retry callback
-- Render workout selector (A-E tabs) matching the source behavior
-- Group exercises by `category` field
-- Per-set weight/reps inputs with localStorage persistence via `saveLog`/`getLogs`
-- Progress bar (completed sets / total sets)
-- Completion toggle per exercise
-- Video placeholder display
+**Option: Expand existing workout card**
+- Each workout card expands to show exercise editor
+- Reuse existing exercise display components
 
-**Key design adaptations vs source:**
-- Replace custom `.container`, `.exercise-card` CSS with Tailwind + shadcn components
-- Use `Card`, `Badge`, `Button`, `Input`, `Progress` from shadcn
-- Category headers: `<div className="flex items-center gap-2"><div className="h-1 w-4 rounded-full bg-primary" /><h3 className="text-sm font-semibold uppercase tracking-wider text-primary">{category}</h3></div>`
-- Exercise cards: use `Card` with inner padding, exercise number as a styled badge
-- Sets: use `Input` components in a grid layout (matching `WorkoutSessionView` pattern)
-- Progress: use shadcn `Progress` component
-- Completion button: styled with check icon (like source)
+**Option: Modal dialog for workout editing**
+- Click "Edit Workout" → modal with full editor
+- Clean separation, doesn't clutter the program view
 
-**Auth:** Wrap with `getCurrentUser()` in the parent page (server component), not inside this component.
+Recommendation: **Modal dialog approach** (cleaner UX, matches existing dialog patterns in the app)
 
-### 3.3 Modify `app/dashboard/workouts/page.tsx`
-**Current:** Server component that fetches DB workouts and renders `WorkoutList`.  
-**Change to:** Two-mode page:
-1. **Primary mode:** Live sheets workout experience (A-E selector, full logging)
-2. **Secondary link:** Link to DB-backed workout management (existing `WorkoutList`)
+### 4.3 API Changes
 
-**New structure:**
-- Check `NEXT_PUBLIC_SHEET_CSV_URL` env var
-- If set → render `SheetsWorkoutView` client component inside `Shell`
-- If not set → fallback to existing `WorkoutList` behavior
-- Auth protection via `getCurrentUser()` + redirect
-
-### 3.4 Optional: Modify `components/workout/workout-item.tsx`
-No changes needed. `WorkoutItem` is DB-backed and used in `WorkoutList` for the management view. The sheets view is a separate component.
-
-### 3.5 Optional: Create `app/dashboard/workouts/live/page.tsx`
-**Purpose:** Dedicated route for the live sheets workout experience.  
-**Pattern:** Can act as a dedicated "Today's Workout" shortcut while the main `/workouts` page remains the DB management view.
-
----
-
-## 4. Design System Alignment
-
-### Color Palette (CSS Variables)
-```
---primary: 240 72.2% 50.6% (blue-ish, light) / 0 72.2% 50.6% (red, dark)
---destructive: 0 84.2% 60.2% (light) / 0 62.8% 30.6% (dark)
---muted: 240 4.8% 95.9% (light) / 0 0% 14.9% (dark)
---background: 0 0% 100% (light) / 0 0% 3.9% (dark)
---foreground: 240 10% 3.9% (light) / 0 0% 98% (dark)
-```
-
-### Typography
-- Font: Inter (via next/font/google)
-- Headings: `text-2xl font-bold` to `text-3xl font-bold`
-- Body: default antialiased
-
-### Spacing & Layout
-- Container: `px-4 sm:px-6 md:px-0` (Shell component)
-- Cards: `p-5` inner padding, `rounded-lg` borders
-- Sections: `space-y-6` between major blocks
-
-### Component Mapping (Source → Target)
-| Source CSS Class | Target Implementation |
-|---|---|
-| `.container` | `Shell` wrapper + `max-w-4xl mx-auto` |
-| `.header` | `DashboardHeader` + manual progress section |
-| `.workout-selector` | Custom flex row of `Button` (ghost/default) |
-| `.selector-btn` | `Button` variant toggle (active = default, inactive = ghost) |
-| `.exercise-card` | `Card` with conditional `border-primary/50 bg-primary/5` |
-| `.exercise-header` | Flex row with number badge + title + meta |
-| `.sets-container` | Vertical stack of set rows, each with `Input` grid |
-| `.complete-btn` | `Button` with check icon, full width |
-| `.tempo-badge` | `Badge` variant secondary |
-| `.progress-bar` | shadcn `Progress` component |
-| `.empty-state` | `EmptyPlaceholder` |
-| `ErrorCard` (component) | `components/ui/error-card.tsx` |
-| `WorkoutSkeleton` (component) | `components/workout/workout-skeleton.tsx` |
-
----
-
-## 5. Auth Integration
-
-**Approach:** Server-component auth pattern (matching existing redesign architecture).
-
-```tsx
-// app/dashboard/workouts/page.tsx
-export default async function WorkoutsPage() {
-  const user = await getCurrentUser()
-  if (!user) redirect("/signin")
-  // ... render
+The workout edit page uses `PATCH /api/workouts/[workoutId]` with this body:
+```json
+{
+  "name": "string",
+  "description": "string",
+  "exercises": [
+    {
+      "id": "workoutExerciseId",
+      "sets": 3,
+      "reps": 10,
+      "weight": 135,
+      "organizationVideoId": "optional-video-id"
+    }
+  ]
 }
 ```
 
-No `AuthGuard` wrapper component needed (unlike the source). The server component handles redirect before any client component renders.
+The Programs page needs to call this same API for the trainer's workout editing.
 
----
+### 4.4 Files to Modify
 
-## 6. Error Handling Strategy
-
-| Scenario | Handling |
-|---|---|
-| Fetch timeout (>10s) | `ErrorCard` with "Request timed out" message + retry |
-| Fetch HTTP error | `ErrorCard` with status message + retry |
-| Empty sheet (0 workouts) | `EmptyPlaceholder` with "No workouts found" |
-| localStorage unavailable | `saveLog`/`getLogs` catch `DOMException` silently, logs to console |
-| localStorage corrupted | `getLogs` catches JSON parse error, returns `[]` |
-| Network offline | Page loads from cache (Next.js default), logging silently fails |
-
-**Retry flow:** `ErrorCard` accepts `onRetry` prop which re-calls `fetchWorkouts()`. The retry function is captured in the error state closure (same pattern as source).
-
----
-
-## 7. File-by-File Breakdown
-
-### New Files
-| File | Purpose | Type |
-|---|---|---|
-| `lib/sheets.ts` | Google Sheets fetch + localStorage log persistence | Library |
-| `components/workout/sheets-workout-view.tsx` | Client component — full live workout UI | Client Component |
-
-### Modified Files
-| File | Change | Risk |
-|---|---|---|
-| `app/dashboard/workouts/page.tsx` | Replace DB-list with sheets view, add env check | Medium — existing file |
-| `app/dashboard/workouts/error.tsx` | Ensure error boundary exists | Low |
-
-### No Changes Needed
-- `components/ui/error-card.tsx` — already compatible
-- `components/workout/workout-skeleton.tsx` — already compatible  
-- `components/layout/shell.tsx` — already compatible
-- `components/pages/dashboard/dashboard-header.tsx` — already compatible
-- `lib/session.ts` — already used for auth
-
-### Optional
 | File | Change |
-|---|---|
-| `app/dashboard/workouts/live/page.tsx` | Dedicated live workout route |
+|------|--------|
+| `app/trainer/programs/[id]/page.tsx` | Add "Edit Workout" button + modal trigger |
+| `components/workout/workout-edit-form.tsx` | (reuse) - Contains sets/reps/weight/video selector |
+| `app/api/workouts/[workoutId]/route.ts` | (exists) - Already handles PATCH |
+
+### 4.5 Video Selector Integration
+
+Already built:
+- `components/workout/workout-edit-form.tsx` has VideoPlayer with muxPlaybackId
+- `/api/organizations/[id]/videos` returns organization's videos
+- Video selector dropdown shows video titles
+
+Reuse the video selector component from `workout-edit-form.tsx`.
 
 ---
 
-## 8. Environment Variables
+## 5. UI Design
 
-| Variable | Status | Notes |
-|---|---|---|
-| `NEXT_PUBLIC_SHEET_CSV_URL` | Must be set in Vercel | Already exists from habithletics-evolve deployment |
+### 5.1 Add "Edit Workout" Button
 
-**CSV URL format:** `https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pub?output=csv`
-
----
-
-## 9. Data Flow
-
-```
-User visits /dashboard/workouts
-        ↓
-Server component: getCurrentUser() → redirect if null
-        ↓
-SheetsWorkoutView mounts (client)
-        ↓
-fetchWorkouts() → Google Sheets CSV → parseCSV() → Workout[]
-        ↓
-User selects workout (A-E)
-        ↓
-Exercises grouped by category displayed
-        ↓
-User inputs weight/reps per set
-        ↓
-saveLog() → localStorage['workout_logs']
-        ↓
-User marks exercise complete
-        ↓
-Progress bar updates (completedSets / totalSets)
+In the workout card header, add:
+```tsx
+<div className="flex justify-between items-center">
+  <h3>Workout Name</h3>
+  <div className="flex gap-2">
+    <Button variant="outline" size="sm" onClick={() => openEditWorkout(workout)}>
+      Edit Workout
+    </Button>
+  </div>
+</div>
 ```
 
+### 5.2 Edit Workout Modal
+
+```tsx
+<Dialog open={editWorkoutOpen} onOpenChange={setEditWorkoutOpen}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Edit: {selectedWorkout?.name}</DialogTitle>
+    </DialogHeader>
+    {/* Exercise editor with sets/reps/weight/video per exercise */}
+  </DialogContent>
+</Dialog>
+```
+
+### 5.3 Exercise Row in Editor
+
+Each exercise shows:
+- Exercise name (read-only)
+- Sets input (number)
+- Reps input (number)  
+- Weight input (number)
+- Video selector dropdown (optional)
+
 ---
 
-## 10. Key Implementation Notes
+## 6. Data Flow
 
-1. **Client component boundary:** `SheetsWorkoutView` must be `"use client"` because it uses `useState`, `useEffect`, and localStorage.
-
-2. **Server → Client data passing:** The server component (`page.tsx`) passes no props — the client component fetches data independently. This keeps the architecture clean.
-
-3. **No conflict with DB-backed workout:** The sheets view is a completely separate data source. The existing `WorkoutSessionView` (DB-backed) remains at `/dashboard/workouts/[workoutId]` for admin workout management.
-
-4. **localStorage key:** `workout_logs` (consistent with source). No namespacing by user needed since Clerk auth gates the page.
-
-5. **Vercel deployment:** No build changes needed. `lib/sheets.ts` has no server-only code. All sheets/network calls happen client-side.
-
-6. **AbortController:** 10s timeout on `fetchWorkouts()` prevents hanging requests. Clear timeout in both success and error paths.
+1. Trainer clicks "Edit Workout" on a workout card
+2. Modal opens with workout's current exercises loaded
+3. Trainer edits sets/reps/weight/video
+4. On save: `PATCH /api/workouts/[workoutId]` with exercise updates
+5. API updates `workout_exercises` table
+6. Modal closes, program data refreshes
 
 ---
 
-## 11. Success Criteria Checklist
+## 7. Success Criteria
 
-- [ ] `lib/sheets.ts` copied and exports `fetchWorkouts`, `saveLog`, `getLogs`, `getLogForExercise`
-- [ ] `SheetsWorkoutView` renders workout selector (A-E)
-- [ ] Exercises display grouped by category with sets/reps/tempo/rest
-- [ ] Per-set weight/reps inputs persist to localStorage
-- [ ] Completion toggle updates progress
-- [ ] `WorkoutSkeleton` shows during initial load
-- [ ] `ErrorCard` shows on fetch failure with retry
-- [ ] `EmptyPlaceholder` shows if sheet returns 0 workouts
-- [ ] Auth: unauthenticated users redirected to `/signin`
-- [ ] Design matches redesign system (Tailwind, shadcn, dark mode)
-- [ ] Builds and deploys to Vercel
+- Trainer can edit workout details (sets, reps, weights) from Programs page
+- Trainer can assign/change videos for exercises from Programs page
+- All changes persist correctly to database
+- Mobile and desktop views both work
+- No existing functionality broken (client assignment, workout add/remove)
+
+---
+
+## 8. Non-Goals (for this iteration)
+
+- Moving the workout editor to inline (not modal)
+- Creating new exercise library UI
+- Bulk exercise operations
+- Copy workout functionality

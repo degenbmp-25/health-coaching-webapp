@@ -17,21 +17,23 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
+
+
+interface Exercise {
+  id: string
+  exercise: { id: string; name: string }
+  sets: number
+  reps: number
+  weight: number | null
+  order: number
+}
 
 interface Workout {
   id: string
   name: string
   description: string | null
-  exercises: Array<{
-    id: string
-    exercise: { id: string; name: string }
-    sets: number
-    reps: number
-    weight: number | null
-    order: number
-  }>
+  exercises: Exercise[]
 }
 
 interface Client {
@@ -62,6 +64,15 @@ interface AvailableWorkout {
   exerciseCount: number
 }
 
+interface EditedExercise {
+  id: string
+  exerciseId: string
+  exerciseName: string
+  sets: number
+  reps: number
+  weight: number | null
+}
+
 export default function TrainerProgramDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [user, setUser] = useState<any>(null)
@@ -78,17 +89,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   const router = useRouter()
   const { toast } = useToast()
 
+  // Workout editor modal state
+  const [editWorkoutOpen, setEditWorkoutOpen] = useState(false)
+  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null)
+  const [editedExercises, setEditedExercises] = useState<EditedExercise[]>([])
+  const [savingWorkout, setSavingWorkout] = useState(false)
+
   useEffect(() => {
     async function load() {
-      // TEMP BYPASS FOR DEMO - Skip auth check, Clerk auth is broken
-      // const userRes = await fetch('/api/users/me')
-      // if (!userRes.ok) {
-      //   router.push("/signin")
-      //   return
-      // }
-      // const currentUser = await userRes.json()
-      // setUser(currentUser)
-
       const res = await fetch(`/api/programs/${id}`)
       if (!res.ok) {
         router.push("/trainer/programs")
@@ -101,13 +109,84 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     load()
   }, [id, router])
 
+  function openEditWorkout(workout: Workout) {
+    setSelectedWorkout(workout)
+    setEditedExercises(
+      workout.exercises.map((ex) => ({
+        id: ex.id,
+        exerciseId: ex.exercise.id,
+        exerciseName: ex.exercise.name,
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight,
+      }))
+    )
+    setEditWorkoutOpen(true)
+  }
+
+  function updateExercise(index: number, field: keyof EditedExercise, value: string | number | null) {
+    setEditedExercises((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }
+
+  async function saveWorkoutEdit() {
+    if (!selectedWorkout) return
+
+    setSavingWorkout(true)
+
+    try {
+      // Transform edited exercises to API format
+      // Note: The PATCH API expects exerciseId (master exercise ID), sets, reps, weight, notes, order
+      const exercisesPayload = editedExercises.map((ex, index) => ({
+        exerciseId: ex.exerciseId,
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight,
+        notes: null,
+        order: index,
+      }))
+
+      const res = await fetch(`/api/workouts/${selectedWorkout.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: selectedWorkout.name,
+          description: selectedWorkout.description,
+          exercises: exercisesPayload,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to save workout")
+      }
+
+      toast({ title: "Workout updated successfully" })
+      
+      // Refresh program data to reflect changes
+      const programRes = await fetch(`/api/programs/${id}`)
+      if (programRes.ok) {
+        const data = await programRes.json()
+        setProgram(data)
+      }
+      
+      setEditWorkoutOpen(false)
+    } catch (error) {
+      console.error("Error saving workout:", error)
+      toast({ title: "Failed to save workout", variant: "destructive" })
+    }
+
+    setSavingWorkout(false)
+  }
+
   async function assignToClient(e: React.FormEvent) {
     e.preventDefault()
     if (!program) return
 
     setAssigning(true)
     
-    // Find client by email
     const clientRes = await fetch(`/api/users?email=${encodeURIComponent(assignEmail)}`)
     if (!clientRes.ok) {
       toast({ title: "User not found", variant: "destructive" })
@@ -148,11 +227,9 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     setLoadingWorkouts(true)
     setSelectedWorkoutIds([])
     
-    // Fetch all workouts available to this trainer
     const res = await fetch("/api/workouts")
     if (res.ok) {
       const data = await res.json()
-      // Filter out workouts already in the program
       const programWorkoutIds = new Set(program?.workouts.map(w => w.id) || [])
       const available = (Array.isArray(data) ? data : data.workouts || [])
         .filter((w: any) => !programWorkoutIds.has(w.id))
@@ -174,7 +251,6 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     
     setSavingWorkouts(true)
     
-    // Use atomic add operation - no read-then-write race condition
     const res = await fetch(`/api/programs/${program.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -182,7 +258,6 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     })
     
     if (res.ok) {
-      // Refresh program data
       const programRes = await fetch(`/api/programs/${id}`)
       if (programRes.ok) {
         const data = await programRes.json()
@@ -201,7 +276,6 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     
     setRemovingWorkoutId(workoutId)
     
-    // Use atomic remove operation - no read-then-write race condition
     const res = await fetch(`/api/programs/${program.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -271,6 +345,13 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         <h3 className="font-medium">{workout.name}</h3>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditWorkout(workout)}
+                        >
+                          Edit Workout
+                        </Button>
                         <span className="text-sm text-muted-foreground">
                           {workout.exercises.length} exercises
                         </span>
@@ -338,6 +419,84 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Workout Modal */}
+      <Dialog open={editWorkoutOpen} onOpenChange={setEditWorkoutOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit: {selectedWorkout?.name}</DialogTitle>
+            <DialogDescription>
+              Update exercise details for this workout
+            </DialogDescription>
+          </DialogHeader>
+
+          {editedExercises.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">No exercises in this workout</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {editedExercises.map((exercise, index) => (
+                <div key={exercise.id} className="border rounded-lg p-4">
+                  <div className="mb-4">
+                    <h4 className="font-medium">{exercise.exerciseName}</h4>
+                  </div>
+                  
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor={`sets-${index}`}>Sets</Label>
+                      <Input
+                        id={`sets-${index}`}
+                        type="number"
+                        min="1"
+                        value={exercise.sets}
+                        onChange={(e) => updateExercise(index, "sets", parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`reps-${index}`}>Reps</Label>
+                      <Input
+                        id={`reps-${index}`}
+                        type="number"
+                        min="1"
+                        value={exercise.reps}
+                        onChange={(e) => updateExercise(index, "reps", parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`weight-${index}`}>Weight (kg)</Label>
+                      <Input
+                        id={`weight-${index}`}
+                        type="number"
+                        min="0"
+                        max="2000"
+                        step="0.5"
+                        value={exercise.weight ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateExercise(index, "weight", val ? parseFloat(val) : null)
+                        }}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="outline" onClick={() => setEditWorkoutOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveWorkoutEdit} disabled={savingWorkout}>
+              {savingWorkout ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Workouts Dialog */}
       <Dialog open={addWorkoutsOpen} onOpenChange={setAddWorkoutsOpen}>
