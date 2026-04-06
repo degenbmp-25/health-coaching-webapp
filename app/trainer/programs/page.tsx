@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { Shell } from "@/components/layout/shell"
@@ -192,9 +193,11 @@ export default function TrainerProgramsPage() {
                 <Button
                   className="w-full mt-4"
                   variant="secondary"
-                  onClick={() => router.push(`/trainer/programs/${program.id}`)}
+                  asChild
                 >
-                  Manage →
+                  <Link href={`/trainer/programs/${program.id}`}>
+                    Manage →
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
