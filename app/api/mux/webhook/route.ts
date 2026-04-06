@@ -266,6 +266,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
+    // Handle video.upload.errored (fires when upload fails or times out)
+    if (body.type === 'video.upload.errored') {
+      const uploadId = body.data.id
+      const error = body.data.error || 'unknown error'
+      
+      console.log(`[MUX_WEBHOOK] Processing video.upload.errored`)
+      console.log(`[MUX_WEBHOOK]   - uploadId: ${uploadId}`)
+      console.log(`[MUX_WEBHOOK]   - error: ${error}`)
+
+      // Find pending video with this upload ID and mark as errored
+      const video = await db.organizationVideo.findFirst({
+        where: {
+          muxAssetId: uploadId,
+          status: 'pending'
+        }
+      })
+
+      if (video) {
+        console.log(`[MUX_WEBHOOK] Found pending video: ${video.id}, marking as errored`)
+        
+        await db.organizationVideo.update({
+          where: { id: video.id },
+          data: { status: 'errored' }
+        })
+        
+        console.log(`[MUX_WEBHOOK] Video marked as errored: ${video.id}`)
+      } else {
+        console.warn(`[MUX_WEBHOOK] No pending video found with upload ID: ${uploadId}`)
+      }
+
+      return NextResponse.json({ received: true })
+    }
+
     // Handle unknown event types gracefully
     console.log(`[MUX_WEBHOOK] Unhandled event type: ${body.type}`)
     return NextResponse.json({ received: true })
