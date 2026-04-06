@@ -7,22 +7,22 @@ import { ModeToggle } from "../mode-toggle"
 
 export default function Footer() {
   return (
-    <footer className="mt-auto">
-      <div className="mx-auto w-full max-w-screen-xl p-6 md:py-8">
-        <div className="sm:flex sm:items-center sm:justify-between">
+    <footer className="mt-auto w-full">
+      <div className="w-full px-4 py-6 md:py-8">
+        <div className="flex flex-col items-center justify-between gap-4 sm:flex-row sm:items-start">
           <Link href="/">
-            <h1 className="mb-2 text-2xl font-bold sm:mb-0">
+            <h1 className="text-xl font-bold sm:text-2xl">
               {siteConfig.name}
             </h1>
           </Link>
-          <ul className="mb-6 flex flex-wrap items-center opacity-60 sm:mb-0">
+          <ul className="flex flex-wrap items-center justify-center gap-2 text-sm opacity-60 sm:gap-4">
             {navLinks.data.map((item, index) => {
               return (
                 item.href && (
                   <li key={index}>
                     <Link
                       href={item.disabled ? "/" : item.href}
-                      className="mr-4 hover:underline md:mr-6"
+                      className="hover:underline"
                     >
                       {item.title}
                     </Link>
@@ -32,9 +32,9 @@ export default function Footer() {
             })}
           </ul>
         </div>
-        <hr className="my-6 text-muted-foreground sm:mx-auto" />
-        <div className="flex items-center justify-center">
-          <div className="block text-sm text-muted-foreground sm:text-center">
+        <hr className="my-4 text-muted-foreground sm:my-6" />
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground sm:text-center">
             © {new Date().getFullYear()}{" "}
             <a
               target="_blank"

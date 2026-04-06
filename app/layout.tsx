@@ -73,7 +73,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={cn("antialiased overflow-x-hidden", inter.className)}>
+        <body className={cn("antialiased overflow-x-hidden min-w-0", inter.className)}>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
             <NextTopLoader color="#DC2645" height={2.5} showSpinner={false} />
             <div
