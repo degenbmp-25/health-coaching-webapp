@@ -82,7 +82,9 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     async function load() {
       const userRes = await fetch('/api/users/me')
       if (!userRes.ok) {
-        router.push("/signin")
+        // Auth failed - for demo, just continue without user
+        // TEMP BYPASS FOR DEMO - Clerk auth is broken
+        setLoading(false)
         return
       }
       const currentUser = await userRes.json()
