@@ -81,7 +81,7 @@ export const trainerLinks: Navigation = {
     {
       title: "Sheets",
       href: "/trainer/sheets",
-      icon: "sheet",
+      icon: "activity",
     },
   ],
 } as const
