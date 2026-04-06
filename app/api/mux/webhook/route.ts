@@ -12,18 +12,59 @@ import { db } from '@/lib/db'
  * verification optional in development and warn if it fails in production without crashing.
  */
 
-// Verify Mux webhook signature using HMAC-SHA256 (for MUX_WEBHOOK_SECRET method)
+// Verify Mux webhook signature using HMAC-SHA256
+// Mux signature format: t=timestamp,v1=signature
+// We verify: HMAC-SHA256(timestamp + "." + rawBody, secret) == signature
 function verifyWebhookSignatureHmac(
-  body: string,
-  signature: string,
+  rawBody: string,
+  muxSignature: string,
   secret: string
 ): boolean {
   const crypto = require('crypto')
+  
+  // Parse Mux signature header (format: t=timestamp,v1=signature)
+  const parts = muxSignature.split(',')
+  let timestamp = ''
+  let signature = ''
+  
+  for (const part of parts) {
+    if (part.startsWith('t=')) {
+      timestamp = part.substring(2)
+    } else if (part.startsWith('v1=')) {
+      signature = part.substring(3)
+    }
+  }
+  
+  if (!timestamp || !signature) {
+    console.error('[MUX_WEBHOOK] Invalid signature format')
+    return false
+  }
+  
+  // Check timestamp is within 5 minutes to prevent replay attacks
+  const now = Math.floor(Date.now() / 1000)
+  const fiveMinutes = 5 * 60
+  if (Math.abs(now - parseInt(timestamp)) > fiveMinutes) {
+    console.error('[MUX_WEBHOOK] Signature timestamp too old or too far in future')
+    return false
+  }
+  
+  // Compute expected signature: HMAC-SHA256(timestamp + "." + rawBody, secret)
+  const signedPayload = `${timestamp}.${rawBody}`
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(body)
+    .update(signedPayload)
     .digest('hex')
-  return signature === expectedSignature
+  
+  // Timing-safe comparison
+  if (signature.length !== expectedSignature.length) {
+    return false
+  }
+  
+  let result = 0
+  for (let i = 0; i < signature.length; i++) {
+    result |= signature.charCodeAt(i) ^ expectedSignature.charCodeAt(i)
+  }
+  return result === 0
 }
 
 export async function POST(request: NextRequest) {
