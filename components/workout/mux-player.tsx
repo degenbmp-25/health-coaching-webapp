@@ -12,12 +12,39 @@ interface VideoPlayerProps {
 export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Stream URL
-  const streamUrl = playbackId && playbackId.trim() !== ''
-    ? `https://stream.mux.com/${playbackId}.m3u8`
-    : null;
+  useEffect(() => {
+    if (!playbackId || playbackId.trim() === '') {
+      setStreamUrl(null);
+      return;
+    }
+
+    // Fetch signed URL from our API
+    const fetchSignedUrl = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`/api/mux/signed-url?playbackId=${encodeURIComponent(playbackId)}`);
+        const data = await response.json();
+        
+        if (data.error || !data.signedUrl) {
+          console.error('[MUX_PLAYER] Failed to get signed URL:', data.error);
+          setHasError(true);
+          setIsLoading(false);
+          return;
+        }
+        
+        setStreamUrl(data.signedUrl);
+      } catch (err) {
+        console.error('[MUX_PLAYER] Error fetching signed URL:', err);
+        setHasError(true);
+        setIsLoading(false);
+      }
+    };
+
+    fetchSignedUrl();
+  }, [playbackId]);
 
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
@@ -26,7 +53,6 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
     const video = videoRef.current;
 
     const initVideo = async () => {
-      setIsLoading(true);
       setHasError(false);
 
       // For Safari and modern browsers that support HLS natively
