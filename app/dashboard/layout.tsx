@@ -1,4 +1,4 @@
-import { dashboardLinks } from "@/config/links"
+import { dashboardLinks, trainerLinks } from "@/config/links"
 import Footer from "@/components/layout/footer"
 import Navbar from "@/components/layout/navbar"
 import { DashboardNav } from "@/components/pages/dashboard/dashboard-nav"
@@ -8,9 +8,12 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
+  // TEMP FOR DEMO: Always show trainer links in mobile nav
+  const mobileLinks = [...dashboardLinks.data, ...trainerLinks.data]
+
   return (
     <div className="flex min-h-screen flex-col space-y-6">
       <Navbar />
@@ -20,7 +23,7 @@ export default function DashboardLayout({
         </aside>
         <main className="flex w-full flex-1 flex-col relative">
           <div className="fixed top-20 left-4 z-50 md:hidden">
-            <MobileNav items={dashboardLinks.data} />
+            <MobileNav items={mobileLinks} />
           </div>
           {children}
         </main>

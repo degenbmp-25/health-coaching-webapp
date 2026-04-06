@@ -42,7 +42,6 @@ export default function TrainerSheetsPage() {
       
       // For demo, use mock user
       setUser({ id: "demo", name: "Demo User", email: "demo@example.com" })
-      setUser(currentUser)
 
       // Fetch organizations
       const orgRes = await fetch("/api/organizations")
