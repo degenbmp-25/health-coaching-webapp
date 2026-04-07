@@ -59,7 +59,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
   }
 
   return (
-    <Shell className="pt-20 md:pt-0">
+    <Shell>
       <DashboardHeader heading="Dashboard" text="Monitor your progress.">
         <div className="hidden sm:block">
           <DateRangePicker />

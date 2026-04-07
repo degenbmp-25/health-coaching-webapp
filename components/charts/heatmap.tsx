@@ -118,7 +118,7 @@ export function Heatmap({ data, params }: HeatmapProps) {
 
   return (
     <Card className="w-full overflow-x-auto p-4 md:p-8">
-      <div className="min-w-[765px]">
+      <div className="min-w-[765px] max-w-full">
         <CalendarHeatmap
           startDate={startDate}
           endDate={currentDate}

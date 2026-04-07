@@ -1,49 +1,59 @@
-# Requirements - Mobile Centering Fix
+# Mobile Centering Fix - Alpha-Evolve Loop
 
-## Problem
-The dashboard and activities pages are off-center on MOBILE (375px viewport). Content is pushed to the RIGHT with a large empty space on the LEFT where the sidebar would be. The right edge is flush with the screen.
+## Target Issue
+Dashboard pages are NOT properly centered on mobile. Specifically:
+- `/dashboard` - OFF CENTER (content pushed left, big gap on right)
+- `/trainer/programs/[id]` - OFF CENTER  
+- `/dashboard/activities` - OFF CENTER
+- `/dashboard/clients` - OFF CENTER
 
-## Current Behavior (BROKEN)
-- Mobile: Large empty space on left (sidebar ghost), content pushed to right
-- Desktop: Works correctly with sidebar + content side-by-side
+## Working Pages (Baseline)
+These pages ARE centered properly on mobile:
+- `/trainer/programs` - centered
+- Homepage `/` - centered
+- Sign-in `/signin` - centered
 
-## Desired Behavior
-- **Mobile (all viewports <1024px)**: 
-  - NO sidebar taking up any space
-  - Content should be FULL WIDTH
-  - Content should be LEFT-ALIGNED starting from the left edge
-  - Hamburger menu should appear for navigation
-- **Desktop (≥1024px)**:
-  - Sidebar visible on left
-  - Content indented to the right of sidebar
-  - Full sidebar navigation
+## Key Observation
+The image analysis shows: "empty space on BOTH left and right sides (~7-8% each), content in the middle (~84-86%)"
 
-## Constraints
-- DEADLINE: 3 hours
-- Must work on actual mobile browsers
-- Must not break desktop layout
-- Currently using Next.js App Router
-- Current branch: fix/mobile-centering
-- Deployment: https://habithletics-redesign-evolve-coral.vercel.app
+This suggests the content IS somewhat centered but may have extra margins or the container is narrower than it should be.
 
-## Technical Context
-- Tried: `hidden md:flex` - sidebar still ghosting
-- Tried: `hidden md:block` - sidebar still ghosting  
-- Tried: `flex flex-col md:flex-row` - sidebar still ghosting
-- Tried: `absolute` positioning - still off-center
+## Root Cause Hypothesis
+Dashboard layout uses different structure than trainer layout:
+- Dashboard: `flex-col` with `container` inside content div
+- Trainer: `grid flex-1 md:grid-cols-[200px_1fr]` as direct child of outer flex
 
-The issue is persistent - the sidebar or some ghost element is taking up ~200px of space on mobile even when "hidden".
-
-## Success Criteria
-1. On mobile (375px): Content is FULL WIDTH, left-aligned, no empty sidebar space
-2. On desktop: Sidebar + content work correctly
-3. Hamburger menu works on mobile for navigation
-4. All pages using this layout must be centered properly
+## Requirements
+1. Fix mobile centering so content fills the viewport properly
+2. Content should be left-aligned with natural `px-4` padding (16px on each side)
+3. NO artificial centering that creates symmetric gutters
+4. Maintain desktop functionality (sidebar, etc.)
+5. Keep auth bypasses in place for demo
 
 ## Scope
-Files to examine:
-- app/dashboard/layout.tsx (main layout)
-- app/activities/layout.tsx (if separate)
-- components/layout/shell.tsx
-- Any shared layout components
-- globals.css (may have container or centering styles)
+Files to investigate:
+- `app/dashboard/layout.tsx` - main dashboard layout (BROKEN)
+- `app/trainer/layout.tsx` - trainer layout (WORKING - use as reference)
+- `components/layout/shell.tsx` - shared Shell component
+- `app/globals.css` - container class definitions
+
+## Success Criteria
+- Mobile viewport (375px): Content fills available width with natural padding
+- Content is LEFT-ALIGNED with 16px left padding
+- NO centering that creates symmetric gutters
+- Desktop (1024px+): Sidebar visible, content properly indented
+- No regression on already-working pages
+
+## Note on Current State
+We've already tried 4 manual fixes:
+1. Added `space-y-6` back to outer div
+2. Used `container` class in content wrapper
+3. Mirrored trainer layout exactly
+4. Currently: Both layouts now use identical structure
+
+The issue may be in:
+- Shell component (`max-w-7xl mx-auto w-full`)
+- globals.css container class behavior
+- Page-level components (not just layout)
+
+This needs deeper investigation - hence 3 architects to find root cause.

@@ -41,7 +41,10 @@ export default async function TrainerLayout({ children }: TrainerLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col space-y-6">
       <Navbar />
+      
+      {/* Content area: grid with sidebar on desktop, stacked on mobile */}
       <div className="container grid flex-1 gap-4 md:gap-12 md:grid-cols-[200px_1fr]">
+        {/* Sidebar: hidden on mobile, visible on desktop */}
         <aside className="hidden w-[200px] flex-col md:flex">
           <DashboardNav items={dashboardLinks.data} />
           {canAccessTrainer && (
@@ -51,13 +54,18 @@ export default async function TrainerLayout({ children }: TrainerLayoutProps) {
             </div>
           )}
         </aside>
+        
+        {/* Main content */}
         <main className="relative flex w-full flex-1 flex-col">
+          {/* Mobile hamburger nav */}
           <div className="fixed left-4 top-20 z-50 md:hidden">
             <MobileNav items={mobileLinks} />
           </div>
+          
           {children}
         </main>
       </div>
+      
       <Footer />
     </div>
   )
