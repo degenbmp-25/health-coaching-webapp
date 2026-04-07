@@ -17,13 +17,13 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col space-y-6 px-4">
       <Navbar />
-      {/* Desktop: sidebar + content in grid. Mobile: sidebar hidden, content centered */}
-      <div className="flex flex-col flex-1 gap-4 md:gap-12">
-        {/* Sidebar: fixed position on desktop */}
-        <aside className="hidden md:block w-[200px] shrink-0 self-start sticky top-4 h-fit flex-col">
+      {/* Desktop: sidebar + content in row. Mobile: content only, centered */}
+      <div className="flex flex-col gap-4 md:flex-row md:gap-12">
+        {/* Sidebar: hidden on mobile, flex row on desktop */}
+        <aside className="hidden md:flex w-[200px] shrink-0 flex-col">
           <DashboardNav items={dashboardLinks.data} />
         </aside>
-        {/* Main content: full width centered on mobile, takes remaining space on desktop */}
+        {/* Main content: full width on mobile, takes remaining space on desktop */}
         <main className="flex w-full flex-1 flex-col relative">
           {/* Mobile hamburger nav - only visible on mobile */}
           <div className="fixed top-20 left-4 z-50 md:hidden">
