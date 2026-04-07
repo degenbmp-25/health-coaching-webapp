@@ -23,15 +23,15 @@ export default async function DashboardLayout({
         <DashboardNav items={dashboardLinks.data} />
       </aside>
       
-      {/* Main content: full width on mobile */}
+      {/* Main content: centered on mobile, indented on desktop */}
       <main className="flex-1 flex flex-col relative">
         {/* Mobile hamburger nav */}
         <div className="fixed top-20 left-4 z-50 lg:hidden">
           <MobileNav items={mobileLinks} />
         </div>
         
-        {/* Content: full width on mobile, indented on desktop */}
-        <div className="w-full px-4 lg:pl-[216px]">
+        {/* Content wrapper: use container for centering on mobile */}
+        <div className="container px-4 lg:pl-[216px]">
           {children}
         </div>
       </main>
