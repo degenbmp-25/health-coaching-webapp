@@ -15,21 +15,23 @@ export default async function DashboardLayout({
   const mobileLinks = [...dashboardLinks.data, ...trainerLinks.data]
 
   return (
-    <div className="flex min-h-screen flex-col space-y-6">
+    <div className="flex min-h-screen flex-col space-y-6 px-4">
       <Navbar />
-      {/* Desktop: sidebar + content in grid. Mobile: content only, centered */}
-      <div className="container flex flex-1 gap-4 md:gap-12">
-        {/* Sidebar: hidden on mobile (<768px), visible on desktop */}
-        <aside className="hidden md:flex w-[200px] flex-col">
+      {/* Desktop: sidebar + content in grid. Mobile: sidebar hidden, content centered */}
+      <div className="flex flex-col flex-1 gap-4 md:gap-12">
+        {/* Sidebar: fixed position on desktop */}
+        <aside className="hidden md:block w-[200px] shrink-0 self-start sticky top-4 h-fit flex-col">
           <DashboardNav items={dashboardLinks.data} />
         </aside>
-        {/* Main content: full width on mobile, takes remaining space on desktop */}
-        <main className="flex w-full flex-1 flex-col relative max-w-7xl mx-auto">
+        {/* Main content: full width centered on mobile, takes remaining space on desktop */}
+        <main className="flex w-full flex-1 flex-col relative">
           {/* Mobile hamburger nav - only visible on mobile */}
           <div className="fixed top-20 left-4 z-50 md:hidden">
             <MobileNav items={mobileLinks} />
           </div>
-          {children}
+          <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-0">
+            {children}
+          </div>
         </main>
       </div>
       <Footer />
