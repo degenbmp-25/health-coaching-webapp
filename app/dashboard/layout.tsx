@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   const mobileLinks = [...dashboardLinks.data, ...trainerLinks.data]
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col space-y-6">
       <Navbar />
       
       {/* DESKTOP ONLY: Fixed sidebar that overlays content */}
@@ -23,14 +23,14 @@ export default async function DashboardLayout({
         <DashboardNav items={dashboardLinks.data} />
       </aside>
       
-      {/* Main content: centered on mobile, indented on desktop */}
+      {/* Main content: centered on mobile */}
       <main className="flex-1 flex flex-col relative">
         {/* Mobile hamburger nav */}
         <div className="fixed top-20 left-4 z-50 lg:hidden">
           <MobileNav items={mobileLinks} />
         </div>
         
-        {/* Content wrapper: use container for centering on mobile */}
+        {/* Content wrapper */}
         <div className="container px-4 lg:pl-[216px]">
           {children}
         </div>
