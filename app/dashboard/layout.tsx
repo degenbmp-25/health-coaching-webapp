@@ -17,19 +17,19 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col space-y-6 px-4">
       <Navbar />
-      {/* Desktop: sidebar + content in row. Mobile: content only, centered */}
-      <div className="flex flex-col gap-4 md:flex-row md:gap-12">
-        {/* Sidebar: hidden on mobile, flex row on desktop */}
-        <aside className="hidden md:flex w-[200px] shrink-0 flex-col">
+      {/* Content area: full width on mobile, sidebar overlaps on desktop */}
+      <div className="relative flex flex-1">
+        {/* Sidebar: absolute on desktop, hidden on mobile */}
+        <aside className="absolute left-0 top-0 hidden lg:block w-[200px] h-full">
           <DashboardNav items={dashboardLinks.data} />
         </aside>
-        {/* Main content: full width on mobile, takes remaining space on desktop */}
+        {/* Main content: full width on mobile, indented on desktop */}
         <main className="flex w-full flex-1 flex-col relative">
-          {/* Mobile hamburger nav - only visible on mobile */}
-          <div className="fixed top-20 left-4 z-50 md:hidden">
+          {/* Mobile hamburger nav */}
+          <div className="fixed top-20 left-4 z-50 lg:hidden">
             <MobileNav items={mobileLinks} />
           </div>
-          <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-0">
+          <div className="lg:pl-[216px] px-4">
             {children}
           </div>
         </main>
