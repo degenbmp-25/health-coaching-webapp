@@ -21,7 +21,7 @@ export default async function DashboardLayout({
         <aside className="hidden w-[200px] flex-col md:flex">
           <DashboardNav items={dashboardLinks.data} />
         </aside>
-        <main className="flex w-full flex-1 flex-col relative">
+        <main className="flex w-full flex-1 flex-col relative max-w-7xl mx-auto">
           <div className="fixed top-20 left-4 z-50 md:hidden">
             <MobileNav items={mobileLinks} />
           </div>
