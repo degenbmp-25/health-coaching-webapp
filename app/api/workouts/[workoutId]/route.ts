@@ -75,7 +75,17 @@ export async function PATCH(
     }
 
     // Resolve organizationVideoIds to muxPlaybackIds before saving
-    let exercisesWithVideo = body.exercises
+    type ExerciseWithMux = {
+      exerciseId: string
+      sets: number
+      reps: number
+      weight?: number
+      notes?: string
+      order: number
+      organizationVideoId?: string
+      muxPlaybackId?: string | null
+    }
+    let exercisesWithVideo: ExerciseWithMux[] = body.exercises
     if (body.exercises.some((e) => e.organizationVideoId)) {
       const videoIds = body.exercises
         .map((e) => e.organizationVideoId)
@@ -91,7 +101,7 @@ export async function PATCH(
       exercisesWithVideo = body.exercises.map((e) => ({
         ...e,
         muxPlaybackId: e.organizationVideoId ? videoMap.get(e.organizationVideoId) ?? null : undefined,
-      }))
+      })) as ExerciseWithMux[]
     }
 
     // Update the workout
