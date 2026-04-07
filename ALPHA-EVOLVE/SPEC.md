@@ -1,176 +1,183 @@
-# SPEC.md — Trainer Program Page Workout Editor Enhancement
+# SPEC.md - Mobile Centering Fix
 
-## Project: habithletics-redesign-evolve
-## Loop: Alpha-Evolve — Enhanced Programs Page Workout Editor
+## Problem Summary
+Dashboard page has ~200px of empty space on the LEFT on mobile (375px), content is pushed RIGHT, right edge flush with screen.
 
----
+## Root Cause Analysis
 
-## 1. Problem Statement
+After examining the code, I've identified **TWO root causes**:
 
-The `/trainer/programs/[id]` page allows trainers to:
-- View program details
-- Add/remove workouts from program
-- Assign clients to programs
+### Root Cause #1: Flex Container with Hidden Absolute Child (Primary)
 
-But it does NOT allow trainers to:
-- Edit exercise details (sets, reps, weights)
-- Change exercise order within a workout
-- Assign videos to exercises
-
-Meanwhile, `/dashboard/workouts/[id]/edit` has a full workout editor, but it's in the "client" section. Trainers need to go there for proper editing.
-
-## 2. Goal
-
-Add robust workout editing to the trainer's Programs page (`/trainer/programs/[id]`) so trainers can fully manage workout details without leaving their context.
-
----
-
-## 3. Existing Code Analysis
-
-### `/trainer/programs/[id]/page.tsx` (Target Page)
-Current structure:
-- Displays program with workouts array
-- Each workout has `id`, `name`, `description`, `exercises[]`
-- Each exercise has `id`, `exercise.name`, `sets`, `reps`, `weight`, `order`
-- Has "Add Workouts" dialog (can add existing workouts)
-- Has "Remove" button per workout (removes from program assignment)
-- NO exercise editing capability
-
-### `/dashboard/workouts/[id]/edit/page.tsx` (Reference Page)
-Full workout editor with:
-- Exercise list with sets/reps/weight inputs
-- Video selector per exercise
-- Save/cancel functionality
-- API: `PATCH /api/workouts/[workoutId]` with exercise updates
-
----
-
-## 4. Implementation Plan
-
-### 4.1 Add Inline Workout Editing to Programs Page
-
-Within each workout card in `/trainer/programs/[id]`, add:
-1. **"Edit Workout" button** — expands inline editor for that workout
-2. **Exercise list** — shows each exercise with editable sets/reps/weight fields
-3. **Video selector** — per exercise, dropdown to assign video from organization_videos
-4. **Save/Cancel** — persist or discard changes
-
-### 4.2 Component Structure
-
-**Option: Expand existing workout card**
-- Each workout card expands to show exercise editor
-- Reuse existing exercise display components
-
-**Option: Modal dialog for workout editing**
-- Click "Edit Workout" → modal with full editor
-- Clean separation, doesn't clutter the program view
-
-Recommendation: **Modal dialog approach** (cleaner UX, matches existing dialog patterns in the app)
-
-### 4.3 API Changes
-
-The workout edit page uses `PATCH /api/workouts/[workoutId]` with this body:
-```json
-{
-  "name": "string",
-  "description": "string",
-  "exercises": [
-    {
-      "id": "workoutExerciseId",
-      "sets": 3,
-      "reps": 10,
-      "weight": 135,
-      "organizationVideoId": "optional-video-id"
-    }
-  ]
-}
+```jsx
+// CURRENT (BROKEN)
+<div className="relative flex flex-1">
+  <aside className="absolute left-0 top-0 hidden lg:block w-[200px] h-full">
+    <DashboardNav items={dashboardLinks.data} />
+  </aside>
+  <main className="flex w-full flex-1 flex-col relative">
 ```
 
-The Programs page needs to call this same API for the trainer's workout editing.
+**The problem:** The parent `<div className="relative flex flex-1">` is a **flex container**. Even though `<aside>` has `hidden lg:block`, the combination of:
+1. `flex flex-1` on the parent
+2. `w-full flex-1` on `<main>`
+3. `absolute` positioning on the sidebar
 
-### 4.4 Files to Modify
+...can cause unexpected behavior where the flex child (`main`) doesn't expand to full width on mobile because the flex container's **intrinsic sizing** is still accounting for the sidebar's declared width (`w-[200px]`).
 
-| File | Change |
-|------|--------|
-| `app/trainer/programs/[id]/page.tsx` | Add "Edit Workout" button + modal trigger |
-| `components/workout/workout-edit-form.tsx` | (reuse) - Contains sets/reps/weight/video selector |
-| `app/api/workouts/[workoutId]/route.ts` | (exists) - Already handles PATCH |
+**On mobile:** The `aside` IS `display: none` (from `hidden`), but the flex container may have already computed its size based on the sidebar's explicit width before the `hidden` class takes effect.
 
-### 4.5 Video Selector Integration
+### Root Cause #2: Tailwind's `hidden lg:block` May Have Specificity Issues
 
-Already built:
-- `components/workout/workout-edit-form.tsx` has VideoPlayer with muxPlaybackId
-- `/api/organizations/[id]/videos` returns organization's videos
-- Video selector dropdown shows video titles
+Tailwind's `hidden` class (`display: none !important`) should override everything. However, in some Next.js/React builds with SSR and hydration, there can be a flash where the sidebar is briefly visible, and the flex container has already computed its layout.
 
-Reuse the video selector component from `workout-edit-form.tsx`.
+### Why CSS Approaches Failed
 
----
+| Approach | Why It Failed |
+|----------|---------------|
+| `hidden md:flex` | Same flex container issue |
+| `hidden md:block` | Same flex container issue |
+| `flex flex-col md:flex-row` | Column on mobile still has flex child with explicit width |
+| `absolute` positioning | Already using this, but parent flex container is the problem |
 
-## 5. UI Design
+## Solution
 
-### 5.1 Add "Edit Workout" Button
+The fix is to **remove the sidebar from the flex parent's space calculation entirely on mobile** by making it a true overlay on desktop and completely outside the flex flow on mobile.
 
-In the workout card header, add:
+### Changes to `app/dashboard/layout.tsx`
+
+**Before:**
 ```tsx
-<div className="flex justify-between items-center">
-  <h3>Workout Name</h3>
-  <div className="flex gap-2">
-    <Button variant="outline" size="sm" onClick={() => openEditWorkout(workout)}>
-      Edit Workout
-    </Button>
+<div className="flex min-h-screen flex-col space-y-6 px-4">
+  <Navbar />
+  <div className="relative flex flex-1">
+    <aside className="absolute left-0 top-0 hidden lg:block w-[200px] h-full">
+      <DashboardNav items={dashboardLinks.data} />
+    </aside>
+    <main className="flex w-full flex-1 flex-col relative">
+      <div className="fixed top-20 left-4 z-50 lg:hidden">
+        <MobileNav items={mobileLinks} />
+      </div>
+      <div className="lg:pl-[216px] px-4">
+        {children}
+      </div>
+    </main>
   </div>
+  <Footer />
 </div>
 ```
 
-### 5.2 Edit Workout Modal
-
+**After:**
 ```tsx
-<Dialog open={editWorkoutOpen} onOpenChange={setEditWorkoutOpen}>
-  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Edit: {selectedWorkout?.name}</DialogTitle>
-    </DialogHeader>
-    {/* Exercise editor with sets/reps/weight/video per exercise */}
-  </DialogContent>
-</Dialog>
+<div className="flex min-h-screen flex-col space-y-6 px-4">
+  <Navbar />
+  
+  {/* DESKTOP ONLY: Fixed sidebar that overlays content */}
+  <aside className="fixed left-0 top-16 bottom-0 w-[200px] z-30 hidden lg:block">
+    <DashboardNav items={dashboardLinks.data} />
+  </aside>
+  
+  {/* Main content: full width on mobile, with left indent on desktop */}
+  <main className="flex w-full flex-1 flex-col relative">
+    {/* Mobile hamburger nav - positioned to NOT affect content flow */}
+    <div className="fixed top-20 left-4 z-50 lg:hidden">
+      <MobileNav items={mobileLinks} />
+    </div>
+    
+    {/* Content: px-4 on mobile (16px padding), lg:pl-[216px] on desktop (sidebar width + buffer) */}
+    <div className="px-4 lg:pl-[216px] w-full">
+      {children}
+    </div>
+  </main>
+  
+  <Footer />
+</div>
 ```
 
-### 5.3 Exercise Row in Editor
+### Key Changes Explained
 
-Each exercise shows:
-- Exercise name (read-only)
-- Sets input (number)
-- Reps input (number)  
-- Weight input (number)
-- Video selector dropdown (optional)
+1. **Sidebar moved OUTSIDE the flex container** - It's no longer a flex child at all
+2. **Sidebar is `fixed` (not `absolute`) on desktop** - `fixed` anchors it to the viewport, `top-16` accounts for navbar height
+3. **Sidebar is `hidden lg:block`** - Hidden on mobile, fixed overlay on desktop
+4. **Removed `relative flex flex-1` wrapper around sidebar+main** - The flex parent was causing the space issue
+5. **Main content uses `px-4` on ALL screen sizes** - No conditional padding; desktop indent comes from sidebar being fixed overlay
+6. **Sidebar removed from document flow on desktop via `fixed`** - Content goes behind it, hence `lg:pl-[216px]`
 
----
+## Files to Change
 
-## 6. Data Flow
+| File | Change |
+|------|--------|
+| `app/dashboard/layout.tsx` | Rewrite layout structure as per above |
 
-1. Trainer clicks "Edit Workout" on a workout card
-2. Modal opens with workout's current exercises loaded
-3. Trainer edits sets/reps/weight/video
-4. On save: `PATCH /api/workouts/[workoutId]` with exercise updates
-5. API updates `workout_exercises` table
-6. Modal closes, program data refreshes
+## Alternative Quick Fix (If Above Doesn't Work)
 
----
+If the above still has issues, try this even simpler approach:
 
-## 7. Success Criteria
+```tsx
+<div className="flex min-h-screen flex-col space-y-6">
+  <Navbar />
+  
+  {/* Mobile: no sidebar space. Desktop: sidebar fixed, content below nav, indented */}
+  <div className="flex flex-1 flex-col lg:flex-row">
+    {/* Mobile nav - only visible on mobile */}
+    <div className="fixed top-20 left-4 z-50 lg:hidden">
+      <MobileNav items={mobileLinks} />
+    </div>
+    
+    {/* Content - always full width on mobile, indented on desktop */}
+    <main className="flex-1 px-4 lg:pl-[216px]">
+      {children}
+    </main>
+  </div>
+  
+  <Footer />
+</div>
+```
 
-- Trainer can edit workout details (sets, reps, weights) from Programs page
-- Trainer can assign/change videos for exercises from Programs page
-- All changes persist correctly to database
-- Mobile and desktop views both work
-- No existing functionality broken (client assignment, workout add/remove)
+With sidebar hidden on mobile via `hidden lg:flex`:
+```tsx
+<aside className="hidden lg:flex w-[200px] flex-col">
+  <DashboardNav items={dashboardLinks.data} />
+</aside>
+```
 
----
+## Verification Steps
 
-## 8. Non-Goals (for this iteration)
+1. **Mobile (375px viewport)**
+   - Open browser dev tools at 375px width
+   - Inspect the main element - it should have `width: 100%` with `padding-left: 16px` and `padding-right: 16px`
+   - The sidebar `<aside>` should have `display: none`
+   - Verify no ghost space on left - content starts at x=0 + 16px padding
+   - Test hamburger menu opens correctly
 
-- Moving the workout editor to inline (not modal)
-- Creating new exercise library UI
-- Bulk exercise operations
-- Copy workout functionality
+2. **Desktop (1024px+ viewport)**
+   - Sidebar should appear on left, fixed position
+   - Content should start at x=216px (200px sidebar + 16px buffer)
+   - No overlap between sidebar and content
+
+3. **Test on actual mobile**
+   - Deploy to Vercel
+   - Open on phone at https://habithletics-redesign-evolve-coral.vercel.app/dashboard
+   - Verify content is full width and left-aligned
+
+## CSS Classes Reference
+
+| Class | Effect |
+|-------|--------|
+| `fixed` | Position relative to viewport |
+| `hidden lg:block` | Hide on mobile, show on desktop |
+| `hidden lg:flex` | Hide on mobile, flex on desktop |
+| `lg:pl-[216px]` | Left padding 216px only on large screens |
+| `px-4` | Padding 16px on all sides |
+| `flex-1` | Grow to fill available space |
+
+## Why This Fix Will Work
+
+1. **Sidebar completely removed from flex flow** - No longer a child of any flex container
+2. **Fixed positioning on desktop** - Overlays content, doesn't affect content width
+3. **Main content is always full-width container** - On mobile: `flex-1 px-4`. On desktop: `flex-1 px-4 lg:pl-[216px]`
+4. **No more ghost space** - The sidebar's 200px width never affects the mobile layout because it's `hidden` AND `fixed` (not in flow)
+
+## Implementation Note
+
+The trainer layout uses a different approach (`grid flex-1 gap-4 md:grid-cols-[200px_1fr]`) which works correctly. The dashboard layout tried to use `absolute` positioning to achieve a similar effect but introduced the flex container bug.
