@@ -106,3 +106,57 @@ The video selector dropdown is implemented as UI scaffolding. The underlying `PA
 - Add/Remove workouts from program
 - Program details display
 - Save/cancel operations with proper loading states
+
+---
+
+## Video Assignment Fix — 2026-04-06 (Builder)
+
+### Summary
+Fixed video assignment UX: removed video dropdown from Workouts Editor (already clean), added working video dropdown to Programs Editor, enhanced API to support `organizationVideoId`.
+
+### Task 1: Workouts Editor — Already Clean
+**File:** `components/workout/workout-edit-form.tsx`
+- Confirmed: No video dropdown exists in this file. Already correct per spec.
+- The component only has exercise selector, sets, reps, weight, notes fields.
+
+### Task 2: Programs Editor — Working Video Dropdown
+**File:** `app/trainer/programs/[id]/page.tsx`
+**Changes:**
+- Added `OrganizationVideo` interface with `id`, `title`, `muxPlaybackId`, `thumbnailUrl`, `duration`
+- Added `organizationVideoId: string | null` to `EditedExercise` interface
+- Added `organizationVideos` and `loadingVideos` state variables
+- Added `loadOrganizationVideos(orgId)` function — fetches from `/api/organizations/${orgId}/videos`
+- Called `loadOrganizationVideos()` in `openEditWorkout()` using `program.organization.id`
+- Added Select dropdown per exercise in the modal for video selection:
+  - Shows "No video" option (value: `"none"`)
+  - Shows all ready organization videos with their titles
+  - Updates `organizationVideoId` on change
+- Payload in `saveWorkoutEdit()` now includes `organizationVideoId` per exercise
+
+### Task 3: API Enhancement
+**File:** `app/api/workouts/[workoutId]/route.ts`
+**Changes:**
+- Added `organizationVideoId: z.string().optional()` to `workoutPatchSchema` exercises array
+- Added video resolution logic: resolves `organizationVideoId` → `muxPlaybackId` via Prisma lookup before writing
+- Added `muxPlaybackId` to the Prisma `create` call inside `deleteMany`/`create` pattern
+- This ensures `muxPlaybackId` is stored on `WorkoutExercise` when a trainer selects a video
+
+### New API Endpoint
+**File:** `app/api/organizations/[id]/videos/route.ts` (NEW)
+- GET endpoint at `/api/organizations/:id/videos`
+- Returns all ready videos for the organization with `id`, `title`, `muxPlaybackId`, `thumbnailUrl`, `duration`
+- Protected by organization membership check
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `app/api/workouts/[workoutId]/route.ts` | Added `organizationVideoId` to Zod schema + Prisma update with muxPlaybackId resolution |
+| `app/trainer/programs/[id]/page.tsx` | Added video dropdown per exercise + state management |
+| `app/api/organizations/[id]/videos/route.ts` | **NEW** — videos listing endpoint |
+
+### Success Criteria Met
+✅ Workouts editor shows video playback only (no dropdown — already clean)
+✅ Programs editor allows trainers to select video per exercise via dropdown
+✅ Video selection persists when "Save Changes" is clicked (via muxPlaybackId resolution in API)
+✅ No existing functionality broken
+

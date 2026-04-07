@@ -22,6 +22,7 @@ const workoutPatchSchema = z.object({
       weight: z.number().optional(),
       notes: z.string().optional(),
       order: z.number(),
+      organizationVideoId: z.string().optional(),
     })
   ),
 })
@@ -73,6 +74,26 @@ export async function PATCH(
       return new Response("Unauthorized", { status: 403 })
     }
 
+    // Resolve organizationVideoIds to muxPlaybackIds before saving
+    let exercisesWithVideo = body.exercises
+    if (body.exercises.some((e) => e.organizationVideoId)) {
+      const videoIds = body.exercises
+        .map((e) => e.organizationVideoId)
+        .filter(Boolean) as string[]
+
+      const videos = await db.organizationVideo.findMany({
+        where: { id: { in: videoIds } },
+        select: { id: true, muxPlaybackId: true },
+      })
+
+      const videoMap = new Map(videos.map((v) => [v.id, v.muxPlaybackId]))
+
+      exercisesWithVideo = body.exercises.map((e) => ({
+        ...e,
+        muxPlaybackId: e.organizationVideoId ? videoMap.get(e.organizationVideoId) ?? null : undefined,
+      }))
+    }
+
     // Update the workout
     await db.workout.update({
       where: {
@@ -83,13 +104,14 @@ export async function PATCH(
         description: body.description,
         exercises: {
           deleteMany: {},
-          create: body.exercises.map((exercise) => ({
+          create: exercisesWithVideo.map((exercise) => ({
             exerciseId: exercise.exerciseId,
             sets: exercise.sets,
             reps: exercise.reps,
             weight: exercise.weight,
             notes: exercise.notes,
             order: exercise.order,
+            muxPlaybackId: exercise.muxPlaybackId ?? null,
           })),
         },
       },
@@ -150,4 +172,4 @@ export async function DELETE(
 
     return new Response(null, { status: 500 })
   }
-} 
+}

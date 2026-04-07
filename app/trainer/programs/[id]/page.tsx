@@ -18,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 
 interface Exercise {
@@ -27,6 +34,7 @@ interface Exercise {
   reps: number
   weight: number | null
   order: number
+  muxPlaybackId?: string | null
 }
 
 interface Workout {
@@ -64,6 +72,14 @@ interface AvailableWorkout {
   exerciseCount: number
 }
 
+interface OrganizationVideo {
+  id: string
+  title: string
+  muxPlaybackId: string | null
+  thumbnailUrl: string | null
+  duration: number | null
+}
+
 interface EditedExercise {
   id: string
   exerciseId: string
@@ -71,6 +87,7 @@ interface EditedExercise {
   sets: number
   reps: number
   weight: number | null
+  organizationVideoId: string | null
 }
 
 export default function TrainerProgramDetailPage({ params }: { params: { id: string } }) {
@@ -93,6 +110,8 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   const [editWorkoutOpen, setEditWorkoutOpen] = useState(false)
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null)
   const [editedExercises, setEditedExercises] = useState<EditedExercise[]>([])
+  const [organizationVideos, setOrganizationVideos] = useState<OrganizationVideo[]>([])
+  const [loadingVideos, setLoadingVideos] = useState(false)
   const [savingWorkout, setSavingWorkout] = useState(false)
 
   useEffect(() => {
@@ -109,6 +128,22 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     load()
   }, [id, router])
 
+  async function loadOrganizationVideos(orgId: string) {
+    setLoadingVideos(true)
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/videos`)
+      if (res.ok) {
+        const videos = await res.json()
+        setOrganizationVideos(Array.isArray(videos) ? videos : [])
+      } else {
+        setOrganizationVideos([])
+      }
+    } catch {
+      setOrganizationVideos([])
+    }
+    setLoadingVideos(false)
+  }
+
   function openEditWorkout(workout: Workout) {
     setSelectedWorkout(workout)
     setEditedExercises(
@@ -119,8 +154,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
         sets: ex.sets,
         reps: ex.reps,
         weight: ex.weight,
+        // muxPlaybackId is stored on the workoutExercise — we resolve orgVideoId from it later
+        organizationVideoId: null,
       }))
     )
+    // Load organization videos for the video selector
+    if (program?.organization.id) {
+      loadOrganizationVideos(program.organization.id)
+    }
     setEditWorkoutOpen(true)
   }
 
@@ -139,7 +180,6 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
 
     try {
       // Transform edited exercises to API format
-      // Note: The PATCH API expects exerciseId (master exercise ID), sets, reps, weight, notes, order
       const exercisesPayload = editedExercises.map((ex, index) => ({
         exerciseId: ex.exerciseId,
         sets: ex.sets,
@@ -147,6 +187,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
         weight: ex.weight,
         notes: null,
         order: index,
+        organizationVideoId: ex.organizationVideoId || undefined,
       }))
 
       const res = await fetch(`/api/workouts/${selectedWorkout.id}`, {
@@ -164,14 +205,14 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       }
 
       toast({ title: "Workout updated successfully" })
-      
+
       // Refresh program data to reflect changes
       const programRes = await fetch(`/api/programs/${id}`)
       if (programRes.ok) {
         const data = await programRes.json()
         setProgram(data)
       }
-      
+
       setEditWorkoutOpen(false)
     } catch (error) {
       console.error("Error saving workout:", error)
@@ -186,7 +227,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     if (!program) return
 
     setAssigning(true)
-    
+
     const clientRes = await fetch(`/api/users?email=${encodeURIComponent(assignEmail)}`)
     if (!clientRes.ok) {
       toast({ title: "User not found", variant: "destructive" })
@@ -226,7 +267,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   async function openAddWorkoutsDialog() {
     setLoadingWorkouts(true)
     setSelectedWorkoutIds([])
-    
+
     const res = await fetch("/api/workouts")
     if (res.ok) {
       const data = await res.json()
@@ -241,22 +282,22 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
         }))
       setAvailableWorkouts(available)
     }
-    
+
     setLoadingWorkouts(false)
     setAddWorkoutsOpen(true)
   }
 
   async function saveWorkouts() {
     if (!program || selectedWorkoutIds.length === 0) return
-    
+
     setSavingWorkouts(true)
-    
+
     const res = await fetch(`/api/programs/${program.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addWorkoutIds: selectedWorkoutIds }),
     })
-    
+
     if (res.ok) {
       const programRes = await fetch(`/api/programs/${id}`)
       if (programRes.ok) {
@@ -273,15 +314,15 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
 
   async function removeWorkout(workoutId: string) {
     if (!program) return
-    
+
     setRemovingWorkoutId(workoutId)
-    
+
     const res = await fetch(`/api/programs/${program.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ removeWorkoutIds: [workoutId] }),
     })
-    
+
     if (res.ok) {
       setProgram({
         ...program,
@@ -441,7 +482,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                   <div className="mb-4">
                     <h4 className="font-medium">{exercise.exerciseName}</h4>
                   </div>
-                  
+
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor={`sets-${index}`}>Sets</Label>
@@ -453,7 +494,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         onChange={(e) => updateExercise(index, "sets", parseInt(e.target.value) || 1)}
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor={`reps-${index}`}>Reps</Label>
                       <Input
@@ -464,7 +505,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         onChange={(e) => updateExercise(index, "reps", parseInt(e.target.value) || 1)}
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor={`weight-${index}`}>Weight (kg)</Label>
                       <Input
@@ -481,6 +522,41 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         placeholder="Optional"
                       />
                     </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Label htmlFor={`video-${index}`}>Video</Label>
+                    {loadingVideos ? (
+                      <Input
+                        id={`video-${index}`}
+                        placeholder="Loading videos..."
+                        disabled
+                        className="mt-2"
+                      />
+                    ) : (
+                      <Select
+                        value={exercise.organizationVideoId || "none"}
+                        onValueChange={(val) =>
+                          updateExercise(
+                            index,
+                            "organizationVideoId",
+                            val === "none" ? null : val
+                          )
+                        }
+                      >
+                        <SelectTrigger id={`video-${index}`} className="mt-2 w-full">
+                          <SelectValue placeholder="No video" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No video</SelectItem>
+                          {organizationVideos.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
               ))}
@@ -507,7 +583,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
               Select workouts to add to {program.name}
             </DialogDescription>
           </DialogHeader>
-          
+
           {loadingWorkouts ? (
             <div className="py-8 text-center text-muted-foreground">Loading workouts...</div>
           ) : availableWorkouts.length === 0 ? (
@@ -554,7 +630,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
               ))}
             </div>
           )}
-          
+
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setAddWorkoutsOpen(false)}>
               Cancel
