@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mux } from '@/lib/mux';
+import { getSignedPlaybackUrl } from '@/lib/mux';
 
 export async function GET(
   request: NextRequest,
@@ -13,13 +13,11 @@ export async function GET(
     // 2. Check if user has access to this video (organization membership)
     
     // Generate a signed playback URL (valid for 1 hour)
-    const playbackUrl = await mux.jwt.signPlaybackId(playbackId, {
-      expiration: '1h',
-    });
+    const playbackUrl = await getSignedPlaybackUrl(playbackId);
 
     return NextResponse.json({
       success: true,
-      playbackUrl: `https://stream.mux.com/${playbackId}.m3u8?token=${playbackUrl}`,
+      playbackUrl,
     });
   } catch (error) {
     console.error('Playback URL error:', error);

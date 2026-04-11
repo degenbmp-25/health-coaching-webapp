@@ -5,6 +5,8 @@ import { Shell } from '@/components/layout/shell'
 import { Card, CardContent } from '@/components/ui/card'
 import { TrainerVideosClient } from './trainer-videos-client'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TrainerVideosPage() {
   const user = await getCurrentUser()
   

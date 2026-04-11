@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: "Monitor your progress.",
 }
 
+export const dynamic = "force-dynamic"
+
 interface DashboardProps {
   searchParams: { from?: string; to?: string }
 }

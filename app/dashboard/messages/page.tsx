@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: "Message with other users.",
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function MessagesPage() {
   const user = await getCurrentUser()
 
@@ -27,4 +29,4 @@ export default async function MessagesPage() {
       <MessagesContainer />
     </Shell>
   )
-} 
+}

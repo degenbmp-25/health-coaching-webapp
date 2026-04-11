@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   description: "Manage account activities.",
 }
 
+export const dynamic = "force-dynamic"
+
 interface ActivitiesPageProps {
   searchParams: { from?: string; to?: string; new?: string }
 }
