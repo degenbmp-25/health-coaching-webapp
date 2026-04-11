@@ -1,10 +1,9 @@
 import { Resend } from 'resend'
-import { env } from '@/env.mjs'
 
-export const resend = new Resend(env.RESEND_API_KEY)
+export const resend = new Resend(process.env.RESEND_API_KEY)
 
 // use verified domain if provided otherwise fallback to resend's sandbox domain
-const FROM_ADDRESS = env.RESEND_FROM ?? "Habithletics <onboarding@resend.dev>"
+const FROM_ADDRESS = process.env.RESEND_FROM ?? "Habithletics <onboarding@resend.dev>"
 
 export async function sendEmail({
   to,
@@ -36,4 +35,4 @@ export async function sendEmail({
     console.error('Email send error:', error)
     return { success: false, error }
   }
-} 
+}

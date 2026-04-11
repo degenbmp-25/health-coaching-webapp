@@ -1,8 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-import { env } from "@/env.mjs"
-
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -41,5 +39,16 @@ export function dateRangeParams(searchParams: { from: string; to: string }) {
 }
 
 export function absoluteUrl(path: string) {
-  return `${env.NEXT_PUBLIC_APP_URL}${path}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  let baseUrl = "https://habithletics.vercel.app"
+
+  if (appUrl) {
+    try {
+      baseUrl = new URL(appUrl).toString().replace(/\/$/, "")
+    } catch {
+      baseUrl = "https://habithletics.vercel.app"
+    }
+  }
+
+  return `${baseUrl}${path}`
 }

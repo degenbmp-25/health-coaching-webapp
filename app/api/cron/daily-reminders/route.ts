@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import DailyReminderEmail from '@/emails/daily-reminder'
-import { env } from '@/env.mjs'
+
+export const dynamic = 'force-dynamic'
 
 const motivationalQuotes = [
   "The only bad workout is the one that didn't happen.",
@@ -19,8 +20,9 @@ export async function GET(request: Request) {
   try {
     // Verify cron secret if CRON_SECRET is configured
     const authHeader = request.headers.get('authorization')
-    if (env.CRON_SECRET) {
-      if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+    const cronSecret = process.env.CRON_SECRET
+    if (cronSecret) {
+      if (authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
     } else {
@@ -164,4 +166,4 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
-} 
+}

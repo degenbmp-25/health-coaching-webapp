@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { env } from '@/env.mjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +15,10 @@ export async function GET() {
   };
 
   // Check 1: Credentials present
-  if (!env.MUX_TOKEN_ID || !env.MUX_TOKEN_SECRET) {
+  const muxTokenId = process.env.MUX_TOKEN_ID;
+  const muxTokenSecret = process.env.MUX_TOKEN_SECRET;
+
+  if (!muxTokenId || !muxTokenSecret) {
     results.checks.credentials.status = 'missing';
     results.error = 'Missing MUX_TOKEN_ID or MUX_TOKEN_SECRET';
     return NextResponse.json(results, { status: 500 });
@@ -28,7 +30,7 @@ export async function GET() {
     const authResponse = await fetch('https://api.mux.com/video/v1/assets', {
       method: 'GET',
       headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')
       }
     });
 
@@ -53,7 +55,7 @@ export async function GET() {
     const uploadResponse = await fetch('https://api.mux.com/video/v1/uploads', {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64'),
+        'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64'),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -73,7 +75,7 @@ export async function GET() {
         await fetch(`https://api.mux.com/video/v1/uploads/${uploadData.data.id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64')
+            'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')
           }
         });
       }
