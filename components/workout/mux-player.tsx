@@ -12,12 +12,48 @@ interface VideoPlayerProps {
 export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Stream URL
-  const streamUrl = playbackId && playbackId.trim() !== ''
-    ? `https://stream.mux.com/${playbackId}.m3u8`
-    : null;
+  useEffect(() => {
+    if (!playbackId || playbackId.trim() === '') {
+      setStreamUrl(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSignedPlaybackUrl() {
+      try {
+        setIsLoading(true);
+        setHasError(false);
+
+        const response = await fetch(`/api/mux/playback/${encodeURIComponent(playbackId)}`);
+        const data = await response.json();
+
+        if (!response.ok || !data.playbackUrl) {
+          throw new Error(data.error || 'Failed to load video URL');
+        }
+
+        if (!cancelled) {
+          setStreamUrl(data.playbackUrl);
+        }
+      } catch (error) {
+        console.error('Error loading signed Mux URL:', error);
+        if (!cancelled) {
+          setHasError(true);
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadSignedPlaybackUrl();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playbackId]);
 
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
@@ -26,7 +62,6 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
     const video = videoRef.current;
 
     const initVideo = async () => {
-      setIsLoading(true);
       setHasError(false);
 
       // For Safari and modern browsers that support HLS natively

@@ -3,9 +3,9 @@ import { z } from "zod"
 
 export const env = createEnv({
   server: {
-    CLERK_SECRET_KEY: z.string().min(1).optional(),
+    CLERK_SECRET_KEY: z.string().min(1),
     CLERK_WEBHOOK_SECRET: z.string().min(1).optional(),
-    DATABASE_URL: z.string().min(1).optional(),
+    DATABASE_URL: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM: z.string().email().optional(),
     CRON_SECRET: z.string().min(1).optional(),
@@ -16,8 +16,8 @@ export const env = createEnv({
     DIRECT_URL: z.string().min(1).optional(),
   },
   client: {
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
-    NEXT_PUBLIC_APP_URL: z.string().min(1).optional(),
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
+    NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   },
   runtimeEnv: {
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,

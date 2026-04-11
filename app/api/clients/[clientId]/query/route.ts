@@ -47,7 +47,7 @@ export async function GET(
         name: true,
         coachId: true,
         primaryTrainerId: true,
-        organizationMemberships: { select: { role: true } },
+        organizationMemberships: { select: { organizationId: true } },
       },
     })
 
@@ -57,12 +57,20 @@ export async function GET(
 
     const isCoachOfClient =
       client.coachId === user.id || client.primaryTrainerId === user.id
-    const userIsOrgTrainer =
-      client.organizationMemberships.some((m) =>
-        ["owner", "trainer"].includes(m.role)
-      )
+    const clientOrgIds = client.organizationMemberships.map((m) => m.organizationId)
+    const requesterOrgTrainer =
+      clientOrgIds.length > 0
+        ? await db.organizationMember.findFirst({
+            where: {
+              userId: user.id,
+              organizationId: { in: clientOrgIds },
+              role: { in: ["owner", "trainer"] },
+            },
+            select: { id: true },
+          })
+        : null
 
-    if (!isCoachOfClient && !userIsOrgTrainer) {
+    if (!isCoachOfClient && !requesterOrgTrainer) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 

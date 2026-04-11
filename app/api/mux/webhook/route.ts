@@ -1,18 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// Verify Mux webhook signature
+// Mux sends signatures as: t=timestamp,v1=signature.
 function verifyWebhookSignature(
-  body: string,
-  signature: string,
+  rawBody: string,
+  muxSignature: string,
   secret: string
 ): boolean {
   const crypto = require('crypto')
+  const parts = muxSignature.split(',')
+  let timestamp = ''
+  let signature = ''
+
+  for (const part of parts) {
+    if (part.startsWith('t=')) {
+      timestamp = part.substring(2)
+    } else if (part.startsWith('v1=')) {
+      signature = part.substring(3)
+    }
+  }
+
+  if (!timestamp || !signature) {
+    console.error('Invalid Mux signature format')
+    return false
+  }
+
+  const timestampSeconds = Number(timestamp)
+  const fiveMinutes = 5 * 60
+  const now = Math.floor(Date.now() / 1000)
+  if (!Number.isFinite(timestampSeconds) || Math.abs(now - timestampSeconds) > fiveMinutes) {
+    console.error('Mux signature timestamp is outside tolerance')
+    return false
+  }
+
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(body)
+    .update(`${timestamp}.${rawBody}`)
     .digest('hex')
-  return signature === expectedSignature
+
+  if (signature.length !== expectedSignature.length) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  )
 }
 
 export async function POST(request: NextRequest) {
@@ -21,8 +54,12 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('mux-signature')
     const webhookSecret = process.env.MUX_WEBHOOK_SECRET
 
-    // Verify signature in production
-    if (process.env.NODE_ENV === 'production' && webhookSecret && signature) {
+    if (process.env.NODE_ENV === 'production') {
+      if (!webhookSecret || !signature) {
+        console.error('Mux webhook signature configuration is missing')
+        return NextResponse.json({ error: 'Webhook signature required' }, { status: 401 })
+      }
+
       if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
       }
