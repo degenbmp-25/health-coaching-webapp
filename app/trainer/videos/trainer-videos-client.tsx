@@ -554,11 +554,11 @@ function VideoThumbnail({ video }: { video: OrganizationVideo }) {
     )
   }
 
-  if (video.thumbnailUrl) {
+  if (video.muxPlaybackId) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={video.thumbnailUrl}
+        src={`/api/mux/thumbnail/${encodeURIComponent(video.muxPlaybackId)}`}
         alt={video.title}
         className="h-16 w-24 object-cover rounded flex-shrink-0"
       />

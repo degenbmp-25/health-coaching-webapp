@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSignedPlaybackUrl } from '@/lib/mux';
+import { getPlaybackUrl } from '@/lib/mux';
 
 export async function GET(
   request: NextRequest,
@@ -12,8 +12,9 @@ export async function GET(
     // 1. Check if user is logged in (Clerk)
     // 2. Check if user has access to this video (organization membership)
     
-    // Generate a signed playback URL (valid for 1 hour)
-    const playbackUrl = await getSignedPlaybackUrl(playbackId);
+    // Generate a playback URL. Public playback IDs do not need a token; signed
+    // playback IDs receive a short-lived token.
+    const playbackUrl = await getPlaybackUrl(playbackId);
 
     return NextResponse.json({
       success: true,

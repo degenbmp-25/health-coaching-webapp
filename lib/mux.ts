@@ -46,6 +46,40 @@ export async function getSignedPlaybackUrl(playbackId: string, expiration = '1h'
   return `https://stream.mux.com/${playbackId}.m3u8?token=${token}`;
 }
 
+async function getPlaybackPolicy(playbackId: string) {
+  const muxClient = createMuxClient()
+  const playback = await muxClient.video.playbackIds.retrieve(playbackId)
+
+  return playback.policy
+}
+
+export async function getPlaybackUrl(playbackId: string, expiration = '1h') {
+  const policy = await getPlaybackPolicy(playbackId)
+
+  if (policy !== 'signed') {
+    return `https://stream.mux.com/${playbackId}.m3u8`
+  }
+
+  return getSignedPlaybackUrl(playbackId, expiration)
+}
+
+export async function getThumbnailUrl(playbackId: string, expiration = '1h') {
+  const policy = await getPlaybackPolicy(playbackId)
+  const thumbnailUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg`
+
+  if (policy !== 'signed') {
+    return thumbnailUrl
+  }
+
+  const muxClient = createMuxClient({ requireSigning: true })
+  const token = await muxClient.jwt.signPlaybackId(playbackId, {
+    type: 'thumbnail',
+    expiration,
+  })
+
+  return `${thumbnailUrl}?token=${token}`
+}
+
 /**
  * Get an upload URL for direct browser uploads
  * Trainers use this to upload videos
@@ -54,7 +88,7 @@ export async function createUploadUrl() {
   const muxClient = createMuxClient();
   const upload = await muxClient.video.uploads.create({
     new_asset_settings: {
-      playback_policy: ['signed'],
+      playback_policy: ['public'],
       encoding_tier: 'baseline',
     },
     cors_origin: process.env.NEXT_PUBLIC_APP_URL || '*',

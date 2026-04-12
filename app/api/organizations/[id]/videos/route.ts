@@ -103,7 +103,7 @@ export async function POST(
       
       const upload = await mux.video.uploads.create({
         new_asset_settings: {
-          playback_policy: ['signed'],
+          playback_policy: ['public'],
           encoding_tier: 'baseline',
           mp4_support: 'capped-1080p',
         },
