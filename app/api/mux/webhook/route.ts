@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
     const signature = request.headers.get('mux-signature')
-    const webhookSecret = process.env.MUX_WEBHOOK_SECRET
+    const webhookSecret = process.env.MUX_WEBHOOK_SECRET?.trim()
 
     if (process.env.NODE_ENV === 'production') {
       if (!webhookSecret || !signature) {
