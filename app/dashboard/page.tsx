@@ -72,7 +72,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
       <div className="space-y-4 sm:space-y-6">
         <HabitLoggingPanel userId={userId} activities={activities} />
         
-        <div className="block sm:hidden px-4">
+        <div className="block sm:hidden">
           <DateRangePicker />
         </div>
         

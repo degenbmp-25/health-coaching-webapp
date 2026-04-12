@@ -60,8 +60,8 @@ export function DataTable<TData, TValue>({
   })
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="mb-4 flex items-center px-2 pt-1">
+    <div className="w-full min-w-0 overflow-hidden">
+      <div className="mb-4 flex min-w-0 items-center gap-2 px-1 pt-1 sm:px-2">
         {children ? <p className="text-lg font-medium">{children}</p> : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -91,7 +91,7 @@ export function DataTable<TData, TValue>({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="rounded-md border">
+      <div className="w-full overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -141,7 +141,7 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
+      <div className="flex items-center justify-end gap-2 py-4">
         <Button
           variant="outline"
           size="sm"

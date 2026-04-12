@@ -348,7 +348,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   return (
     <Shell>
       <DashboardHeader heading={program.name} text={program.organization.name}>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <Button variant="outline" onClick={openSettingsDialog}>
             <Settings className="h-4 w-4 mr-2" />
             Settings
@@ -366,8 +366,8 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <CardTitle>Workouts in Program</CardTitle>
                 <CardDescription>{program.workouts.length} workouts</CardDescription>
               </div>
@@ -387,11 +387,11 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
             ) : (
               <div className="space-y-4">
                 {program.workouts.map((workout, index) => (
-                  <div key={workout.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
+                  <div key={workout.id} className="min-w-0 border rounded-lg p-4">
+                    <div className="mb-2 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Badge variant="outline">{index + 1}</Badge>
-                        <h3 className="font-medium">{workout.name}</h3>
+                        <h3 className="min-w-0 break-words font-medium">{workout.name}</h3>
                         {workout.weekNumber !== null && (
                           <Badge variant="secondary">Week {workout.weekNumber}</Badge>
                         )}
@@ -401,7 +401,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-muted-foreground">
                           {workout.exercises.length} exercises
                         </span>
@@ -423,7 +423,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                       </div>
                     </div>
                     {workout.exercises.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="break-words text-sm text-muted-foreground">
                         {workout.exercises.slice(0, 3).map((ex) => ex.exercise.name).join(", ")}
                         {workout.exercises.length > 3 && ` +${workout.exercises.length - 3} more`}
                       </div>
@@ -500,7 +500,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
             <>
               {/* Week/Day selectors - shown when workouts are selected */}
               {selectedWorkoutIds.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 p-3 bg-muted/50 rounded-lg mb-4">
+                <div className="grid grid-cols-1 gap-3 p-3 bg-muted/50 rounded-lg mb-4 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Week Number</Label>
                     <Select

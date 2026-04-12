@@ -106,24 +106,24 @@ export default function TrainerClientsPage() {
               {clients.map((client) => (
                 <div
                   key={client.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                  className="flex min-w-0 flex-col gap-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer sm:flex-row sm:items-center sm:justify-between"
                   onClick={() => router.push(`/trainer/clients/${client.id}`)}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-muted flex items-center justify-center">
                       {client.image ? (
-                        <img src={client.image} className="w-10 h-10 rounded-full" />
+                        <img src={client.image} alt="" className="w-10 h-10 rounded-full" />
                       ) : (
                         <span className="text-lg">{client.name?.[0] || client.email[0]}</span>
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium">{client.name || "Unknown"}</p>
-                      <p className="text-sm text-muted-foreground">{client.email}</p>
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">{client.name || "Unknown"}</p>
+                      <p className="break-all text-sm text-muted-foreground">{client.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{client.organizationName}</span>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <span className="break-words text-sm text-muted-foreground">{client.organizationName}</span>
                     <Button
                       type="button"
                       variant="ghost"
