@@ -24,6 +24,13 @@ export async function POST(req: Request) {
         id: workoutId,
       },
       include: {
+        user: {
+          select: {
+            organizationMemberships: {
+              select: { organizationId: true },
+            },
+          },
+        },
         program: {
           include: {
             assignments: {
@@ -43,8 +50,21 @@ export async function POST(req: Request) {
     const isOwner = workout.userId === user.id
     const isAssignedToProgram = workout.program?.assignments &&
       workout.program.assignments.length > 0
+    const workoutOrgIds = workout.program?.organizationId
+      ? [workout.program.organizationId]
+      : workout.user.organizationMemberships.map((membership) => membership.organizationId)
+    const canManageOrgWorkout = workoutOrgIds.length > 0
+      ? await db.organizationMember.findFirst({
+          where: {
+            userId: user.id,
+            organizationId: { in: workoutOrgIds },
+            role: { in: ["owner", "trainer", "coach"] },
+          },
+          select: { id: true },
+        })
+      : null
 
-    if (!isOwner && !isAssignedToProgram) {
+    if (!isOwner && !isAssignedToProgram && !canManageOrgWorkout) {
       return new Response("Forbidden", { status: 403 })
     }
 
