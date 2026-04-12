@@ -1,10 +1,21 @@
 import Mux from '@mux/mux-node';
 
+export function getMuxCredentials() {
+  const tokenId = process.env.MUX_TOKEN_ID?.trim()
+  const tokenSecret = process.env.MUX_TOKEN_SECRET?.trim()
+  const jwtSigningKey = process.env.MUX_SIGNING_KEY_ID?.trim()
+  const jwtPrivateKey = process.env.MUX_SIGNING_KEY?.trim()
+
+  return {
+    tokenId,
+    tokenSecret,
+    jwtSigningKey,
+    jwtPrivateKey,
+  }
+}
+
 function createMuxClient({ requireSigning = false } = {}) {
-  const tokenId = process.env.MUX_TOKEN_ID
-  const tokenSecret = process.env.MUX_TOKEN_SECRET
-  const jwtSigningKey = process.env.MUX_SIGNING_KEY_ID
-  const jwtPrivateKey = process.env.MUX_SIGNING_KEY
+  const { tokenId, tokenSecret, jwtSigningKey, jwtPrivateKey } = getMuxCredentials()
 
   if (!tokenId || !tokenSecret) {
     throw new Error('Mux credentials are not configured')

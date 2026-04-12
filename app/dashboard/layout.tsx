@@ -46,7 +46,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col space-y-6">
       <Navbar />
-      <div className="container grid flex-1 gap-4 md:gap-12 md:grid-cols-[200px_1fr]">
+      <div className="container grid w-full min-w-0 flex-1 gap-4 md:gap-12 md:grid-cols-[200px_1fr]">
         <aside className="hidden w-[200px] flex-col md:flex">
           <DashboardNav items={dashboardLinks.data} />
           {canAccessTrainer && (
@@ -56,7 +56,7 @@ export default async function DashboardLayout({
             </div>
           )}
         </aside>
-        <main className="flex w-full flex-1 flex-col relative">
+        <main className="relative flex w-full min-w-0 flex-1 flex-col">
           <div className="fixed top-20 left-4 z-50 md:hidden">
             <MobileNav items={mobileLinks} />
           </div>

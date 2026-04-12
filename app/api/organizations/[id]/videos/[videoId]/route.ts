@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { getMuxCredentials } from '@/lib/mux'
 
 // PATCH /api/organizations/[id]/videos/[videoId] - Update video (rename)
 export async function PATCH(
@@ -100,8 +101,7 @@ export async function DELETE(
     }
 
     // Delete from Mux (if we have a real asset ID)
-    const muxTokenId = process.env.MUX_TOKEN_ID
-    const muxTokenSecret = process.env.MUX_TOKEN_SECRET
+    const { tokenId: muxTokenId, tokenSecret: muxTokenSecret } = getMuxCredentials()
 
     if (muxTokenId && muxTokenSecret && video.muxAssetId) {
       const credentials = Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')

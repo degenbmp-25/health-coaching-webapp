@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { getMuxCredentials } from '@/lib/mux'
 import Mux from '@mux/mux-node'
 
 // GET /api/organizations/[id]/videos - List all videos for an organization
@@ -75,8 +76,7 @@ export async function POST(
     }
 
     // Get Mux credentials
-    const muxTokenId = process.env.MUX_TOKEN_ID
-    const muxTokenSecret = process.env.MUX_TOKEN_SECRET
+    const { tokenId: muxTokenId, tokenSecret: muxTokenSecret } = getMuxCredentials()
 
     if (!muxTokenId || !muxTokenSecret) {
       console.error('[Mux] Mux credentials are missing from environment variables')
@@ -91,9 +91,13 @@ export async function POST(
         tokenSecret: muxTokenSecret,
       })
       
-      // Get the app URL for cors_origin, default to a safe value
+      const requestOrigin = req.headers.get('origin')
       const appUrl = process.env.NEXT_PUBLIC_APP_URL
-      const corsOrigin = appUrl && appUrl.startsWith('http') ? appUrl : 'https://app.habithletics.com'
+      const corsOrigin = requestOrigin?.startsWith('http')
+        ? requestOrigin
+        : appUrl?.startsWith('http')
+          ? appUrl
+          : 'https://app.habithletics.com'
       
       console.log('[DEBUG] Creating upload with cors_origin:', corsOrigin)
       
