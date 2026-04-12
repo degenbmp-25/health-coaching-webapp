@@ -24,8 +24,10 @@ function envDiagnostic(value: string | undefined) {
 }
 
 export async function GET() {
-  const muxTokenId = process.env.MUX_TOKEN_ID;
-  const muxTokenSecret = process.env.MUX_TOKEN_SECRET;
+  const rawMuxTokenId = process.env.MUX_TOKEN_ID;
+  const rawMuxTokenSecret = process.env.MUX_TOKEN_SECRET;
+  const muxTokenId = rawMuxTokenId?.trim();
+  const muxTokenSecret = rawMuxTokenSecret?.trim();
 
   const results = {
     timestamp: new Date().toISOString(),
@@ -35,8 +37,8 @@ export async function GET() {
       writePermissions: { status: 'unknown' as 'ok' | 'failed' | 'error' },
     },
     diagnostics: {
-      muxTokenId: envDiagnostic(muxTokenId),
-      muxTokenSecret: envDiagnostic(muxTokenSecret),
+      muxTokenId: envDiagnostic(rawMuxTokenId),
+      muxTokenSecret: envDiagnostic(rawMuxTokenSecret),
     },
     healthy: false,
     error: null as string | null
