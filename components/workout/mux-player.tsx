@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
+import MuxPlayer from '@mux/mux-player-react/lazy';
 import { Icons } from '@/components/icons';
 
 interface VideoPlayerProps {
@@ -11,102 +12,6 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) {
   const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (!playbackId || playbackId.trim() === '') {
-      setStreamUrl(null);
-      setIsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadSignedPlaybackUrl() {
-      try {
-        setIsLoading(true);
-        setHasError(false);
-
-        const response = await fetch(`/api/mux/playback/${encodeURIComponent(playbackId)}`);
-        const data = await response.json();
-
-        if (!response.ok || !data.playbackUrl) {
-          throw new Error(data.error || 'Failed to load video URL');
-        }
-
-        if (!cancelled) {
-          setStreamUrl(data.playbackUrl);
-        }
-      } catch (error) {
-        console.error('Error loading signed Mux URL:', error);
-        if (!cancelled) {
-          setHasError(true);
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadSignedPlaybackUrl();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playbackId]);
-
-  useEffect(() => {
-    if (!streamUrl || !videoRef.current) return;
-
-    let hlsInstance: any = null;
-    const video = videoRef.current;
-
-    const initVideo = async () => {
-      setHasError(false);
-
-      // For Safari and modern browsers that support HLS natively
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = streamUrl;
-        video.addEventListener('loadedmetadata', () => setIsLoading(false));
-        video.addEventListener('error', () => setHasError(true));
-        return;
-      }
-
-      // For other browsers, use hls.js
-      try {
-        const Hls = (await import('hls.js')).default;
-        if (Hls.isSupported()) {
-          hlsInstance = new Hls({});
-          hlsInstance.loadSource(streamUrl);
-          hlsInstance.attachMedia(video);
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            setIsLoading(false);
-          });
-          hlsInstance.on(Hls.Events.ERROR, (event: any, data: any) => {
-            if (data.fatal) {
-              setHasError(true);
-              setIsLoading(false);
-            }
-          });
-        } else {
-          setHasError(true);
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error('Error loading HLS:', err);
-        setHasError(true);
-        setIsLoading(false);
-      }
-    };
-
-    initVideo();
-
-    return () => {
-      if (hlsInstance) {
-        hlsInstance.destroy();
-      }
-    };
-  }, [streamUrl]);
 
   // Guard against empty playbackId
   if (!playbackId || playbackId.trim() === '') {
@@ -133,17 +38,20 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
   }
 
   return (
-    <div className="rounded-md overflow-hidden border relative" style={{ aspectRatio: '16/9' }}>
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-10">
-          <Icons.spinner className="h-8 w-8 animate-spin" />
-        </div>
-      )}
-      <video
-        ref={videoRef}
-        controls
-        playsInline
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+    <div className="rounded-md overflow-hidden border relative bg-black" style={{ aspectRatio: '16/9' }}>
+      <MuxPlayer
+        playbackId={playbackId}
+        metadata={{
+          video_id: playbackId,
+          video_title: title || 'Workout video',
+        }}
+        onError={(event) => {
+          console.error('Mux player error:', event);
+          setHasError(true);
+        }}
+        loading="viewport"
+        streamType="on-demand"
+        style={{ width: '100%', height: '100%', display: 'block' }}
         className={className}
       />
     </div>
