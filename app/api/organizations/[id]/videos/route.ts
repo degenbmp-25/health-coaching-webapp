@@ -17,12 +17,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 
@@ -55,12 +55,12 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 
@@ -104,6 +104,7 @@ export async function POST(
       const upload = await mux.video.uploads.create({
         new_asset_settings: {
           playback_policy: ['signed'],
+          encoding_tier: 'baseline',
           mp4_support: 'capped-1080p',
         },
         cors_origin: corsOrigin,

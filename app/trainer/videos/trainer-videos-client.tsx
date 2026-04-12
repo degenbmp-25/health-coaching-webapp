@@ -142,7 +142,12 @@ export function TrainerVideosClient({
       })
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video to Mux')
+        const errorText = await uploadResponse.text().catch(() => '')
+        throw new Error(
+          errorText
+            ? `Failed to upload video to Mux (${uploadResponse.status}): ${errorText}`
+            : `Failed to upload video to Mux (${uploadResponse.status})`
+        )
       }
 
       setUploadProgress('Processing video...')
@@ -321,7 +326,7 @@ export function TrainerVideosClient({
                 <Input
                   id="video-file"
                   type="file"
-                  accept="video/*,.mov,.mp4,.heic,.heif"
+                  accept="video/*,.mov,.mp4"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   disabled={isUploading}
                 />

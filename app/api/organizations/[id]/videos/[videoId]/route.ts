@@ -16,12 +16,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 
@@ -75,12 +75,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 

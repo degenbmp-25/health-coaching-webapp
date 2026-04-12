@@ -26,6 +26,7 @@ function envDiagnostic(value: string | undefined) {
 export async function GET() {
   const rawMuxTokenId = process.env.MUX_TOKEN_ID;
   const rawMuxTokenSecret = process.env.MUX_TOKEN_SECRET;
+  const rawMuxWebhookSecret = process.env.MUX_WEBHOOK_SECRET;
   const muxTokenId = rawMuxTokenId?.trim();
   const muxTokenSecret = rawMuxTokenSecret?.trim();
 
@@ -39,6 +40,7 @@ export async function GET() {
     diagnostics: {
       muxTokenId: envDiagnostic(rawMuxTokenId),
       muxTokenSecret: envDiagnostic(rawMuxTokenSecret),
+      muxWebhookSecret: envDiagnostic(rawMuxWebhookSecret),
     },
     healthy: false,
     error: null as string | null

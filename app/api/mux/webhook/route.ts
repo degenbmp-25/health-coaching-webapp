@@ -72,7 +72,8 @@ export async function POST(request: NextRequest) {
     if (body.type === 'video.asset.ready') {
       const assetId = body.data.id
       const playbackId = body.data.playback_ids?.[0]?.id
-      const thumbnailUrl = body.data.thumbnail_urls?.[0]?.replace(/\?.*/, '') // Remove query params
+      const uploadId = body.data.upload_id
+      const thumbnailUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg` : null
       const duration = body.data.duration ? Math.floor(body.data.duration) : null
 
       if (!assetId) {
@@ -82,7 +83,12 @@ export async function POST(request: NextRequest) {
 
       // Find the OrganizationVideo with this asset ID
       const video = await db.organizationVideo.findFirst({
-        where: { muxAssetId: assetId }
+        where: {
+          OR: [
+            { muxAssetId: assetId },
+            ...(uploadId ? [{ muxAssetId: uploadId }] : []),
+          ],
+        },
       })
 
       if (!video) {
@@ -95,6 +101,7 @@ export async function POST(request: NextRequest) {
         where: { id: video.id },
         data: {
           muxPlaybackId: playbackId || null,
+          muxAssetId: assetId,
           thumbnailUrl: thumbnailUrl || null,
           duration: duration || null,
           status: 'ready'
@@ -108,9 +115,15 @@ export async function POST(request: NextRequest) {
     // Handle video.asset.errored event
     if (body.type === 'video.asset.errored') {
       const assetId = body.data.id
+      const uploadId = body.data.upload_id
 
       const video = await db.organizationVideo.findFirst({
-        where: { muxAssetId: assetId }
+        where: {
+          OR: [
+            { muxAssetId: assetId },
+            ...(uploadId ? [{ muxAssetId: uploadId }] : []),
+          ],
+        },
       })
 
       if (video) {
@@ -127,7 +140,9 @@ export async function POST(request: NextRequest) {
     // Handle video.upload.asset_created (alternative event from Mux)
     if (body.type === 'video.upload.asset_created') {
       const uploadId = body.data.id
-      const assetId = body.data.asset_id?.id
+      const assetId = typeof body.data.asset_id === 'string'
+        ? body.data.asset_id
+        : body.data.asset_id?.id
 
       if (uploadId) {
         // Find pending video with this upload ID as asset ID
