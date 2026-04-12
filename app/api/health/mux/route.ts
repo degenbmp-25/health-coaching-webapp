@@ -1,8 +1,32 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
+function envDiagnostic(value: string | undefined) {
+  if (!value) {
+    return {
+      present: false,
+      length: 0,
+      fingerprint: null,
+      hasLeadingOrTrailingWhitespace: false,
+      containsNewline: false,
+    };
+  }
+
+  return {
+    present: true,
+    length: value.length,
+    fingerprint: createHash('sha256').update(value).digest('hex').slice(0, 12),
+    hasLeadingOrTrailingWhitespace: value !== value.trim(),
+    containsNewline: /[\r\n]/.test(value),
+  };
+}
+
 export async function GET() {
+  const muxTokenId = process.env.MUX_TOKEN_ID;
+  const muxTokenSecret = process.env.MUX_TOKEN_SECRET;
+
   const results = {
     timestamp: new Date().toISOString(),
     checks: {
@@ -10,14 +34,15 @@ export async function GET() {
       authentication: { status: 'unknown' as 'ok' | 'failed' | 'error' },
       writePermissions: { status: 'unknown' as 'ok' | 'failed' | 'error' },
     },
+    diagnostics: {
+      muxTokenId: envDiagnostic(muxTokenId),
+      muxTokenSecret: envDiagnostic(muxTokenSecret),
+    },
     healthy: false,
     error: null as string | null
   };
 
   // Check 1: Credentials present
-  const muxTokenId = process.env.MUX_TOKEN_ID;
-  const muxTokenSecret = process.env.MUX_TOKEN_SECRET;
-
   if (!muxTokenId || !muxTokenSecret) {
     results.checks.credentials.status = 'missing';
     results.error = 'Missing MUX_TOKEN_ID or MUX_TOKEN_SECRET';
