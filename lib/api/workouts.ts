@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client"
+
 import { db } from "@/lib/db"
 
 // Role constants to avoid magic strings
@@ -6,6 +8,12 @@ const ROLE = {
   TRAINER: "trainer",
   CLIENT: "client",
 } as const
+
+const PROGRAM_WORKOUT_ORDER: Prisma.WorkoutOrderByWithRelationInput[] = [
+  { weekNumber: "asc" },
+  { dayOfWeek: "asc" },
+  { createdAt: "asc" },
+]
 
 /**
  * Get workouts for a user with multi-tenant awareness.
@@ -30,7 +38,7 @@ export async function getUserWorkouts(userId: string) {
           orderBy: { order: "asc" },
         },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: PROGRAM_WORKOUT_ORDER,
     });
   }
 
@@ -60,7 +68,7 @@ export async function getUserWorkouts(userId: string) {
           },
           user: { select: { id: true, name: true } },
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: PROGRAM_WORKOUT_ORDER,
       });
     }
 
@@ -75,7 +83,7 @@ export async function getUserWorkouts(userId: string) {
         },
         user: { select: { id: true, name: true } },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: PROGRAM_WORKOUT_ORDER,
     });
   }
 
@@ -100,7 +108,7 @@ export async function getUserWorkouts(userId: string) {
       },
       user: { select: { id: true, name: true } },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: PROGRAM_WORKOUT_ORDER,
   });
 }
 

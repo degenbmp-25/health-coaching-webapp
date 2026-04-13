@@ -1,7 +1,14 @@
 import { z } from "zod"
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { getCurrentUser } from "@/lib/session"
 import { db } from "@/lib/db"
+
+const PROGRAM_WORKOUT_ORDER: Prisma.WorkoutOrderByWithRelationInput[] = [
+  { weekNumber: "asc" },
+  { dayOfWeek: "asc" },
+  { createdAt: "asc" },
+]
 
 const routeContextSchema = z.object({
   params: z.object({
@@ -63,7 +70,7 @@ export async function GET(
               orderBy: { order: "asc" },
             },
           },
-          orderBy: { createdAt: "asc" },
+          orderBy: PROGRAM_WORKOUT_ORDER,
         },
         assignments: {
           include: {
