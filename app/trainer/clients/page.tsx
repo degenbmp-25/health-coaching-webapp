@@ -178,6 +178,7 @@ export default function TrainerClientsPage() {
               <DialogTitle>Add Member</DialogTitle>
               <DialogDescription>
                 Add a signed-up user to your organization as a client or trainer.
+                Trainers in the same organization can work with organization clients.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={addMember} className="space-y-4">
@@ -241,7 +242,7 @@ export default function TrainerClientsPage() {
 
               {memberRole === "client" && (
                 <div className="space-y-2">
-                  <Label>Primary trainer</Label>
+                  <Label>Default trainer</Label>
                   <Select value={selectedTrainerId} onValueChange={setSelectedTrainerId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose trainer" />

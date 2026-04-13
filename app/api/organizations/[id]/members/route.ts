@@ -114,22 +114,6 @@ export async function POST(
       )
     }
 
-    const existingMembership = await db.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: params.id,
-          userId: invitedUser.id,
-        },
-      },
-    })
-
-    if (existingMembership) {
-      return NextResponse.json(
-        { error: "User is already a member" },
-        { status: 409 }
-      )
-    }
-
     let primaryTrainerId: string | null = null
     if (body.role === "client") {
       primaryTrainerId = body.primaryTrainerId ?? user.id
@@ -149,6 +133,39 @@ export async function POST(
           { status: 400 }
         )
       }
+    }
+
+    const existingMembership = await db.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: params.id,
+          userId: invitedUser.id,
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+      },
+    })
+
+    if (existingMembership) {
+      if (body.role === "client" && existingMembership.role === "client") {
+        await db.user.update({
+          where: { id: invitedUser.id },
+          data: {
+            organizationRole: "client",
+            primaryTrainerId,
+          },
+        })
+
+        return NextResponse.json(existingMembership)
+      }
+
+      return NextResponse.json(
+        { error: `User is already a ${existingMembership.role} in this organization` },
+        { status: 409 }
+      )
     }
 
     const newMembership = await db.organizationMember.create({
