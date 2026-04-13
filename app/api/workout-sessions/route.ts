@@ -24,6 +24,13 @@ export async function POST(req: Request) {
         id: workoutId,
       },
       include: {
+        exercises: {
+          select: {
+            id: true,
+            exerciseId: true,
+            sets: true,
+          },
+        },
         user: {
           select: {
             organizationMemberships: {
@@ -68,6 +75,75 @@ export async function POST(req: Request) {
       return new Response("Forbidden", { status: 403 })
     }
 
+    const getPreviousSetLogs = async () => {
+      const exerciseIds = Array.from(
+        new Set(workout.exercises.map((exercise) => exercise.exerciseId))
+      )
+
+      if (exerciseIds.length === 0) {
+        return []
+      }
+
+      const previousLogs = await db.setLog.findMany({
+        where: {
+          completed: true,
+          workoutExercise: {
+            exerciseId: { in: exerciseIds },
+          },
+          session: {
+            userId: user.id,
+            status: "completed",
+          },
+        },
+        include: {
+          session: {
+            select: {
+              id: true,
+              completedAt: true,
+              workoutId: true,
+              workout: {
+                select: { name: true },
+              },
+            },
+          },
+          workoutExercise: {
+            select: {
+              exerciseId: true,
+            },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+      })
+
+      const currentExercisesByExerciseId = new Map<string, typeof workout.exercises>()
+      for (const exercise of workout.exercises) {
+        const existing = currentExercisesByExerciseId.get(exercise.exerciseId) || []
+        currentExercisesByExerciseId.set(exercise.exerciseId, [...existing, exercise])
+      }
+
+      const previousByCurrentSet = new Map<string, any>()
+      for (const log of previousLogs) {
+        const matchingExercises = currentExercisesByExerciseId.get(log.workoutExercise.exerciseId) || []
+        for (const currentExercise of matchingExercises) {
+          if (log.setNumber >= currentExercise.sets) continue
+
+          const key = `${currentExercise.id}_${log.setNumber}`
+          if (previousByCurrentSet.has(key)) continue
+
+          previousByCurrentSet.set(key, {
+            workoutExerciseId: currentExercise.id,
+            setNumber: log.setNumber,
+            weight: log.weight,
+            reps: log.reps,
+            completedAt: log.session.completedAt,
+            workoutName: log.session.workout.name,
+          })
+        }
+      }
+
+      return Array.from(previousByCurrentSet.values())
+    }
+
     // Resume existing in-progress session if one exists
     const existing = await db.workoutSession.findFirst({
       where: {
@@ -82,7 +158,10 @@ export async function POST(req: Request) {
     })
 
     if (existing) {
-      return Response.json(existing)
+      return Response.json({
+        ...existing,
+        previousSetLogs: await getPreviousSetLogs(),
+      })
     }
 
     // Create a new session
@@ -97,7 +176,10 @@ export async function POST(req: Request) {
       },
     })
 
-    return Response.json(session, { status: 201 })
+    return Response.json({
+      ...session,
+      previousSetLogs: await getPreviousSetLogs(),
+    }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return new Response(JSON.stringify(error.issues), { status: 422 })

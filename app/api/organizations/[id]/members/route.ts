@@ -96,6 +96,13 @@ export async function POST(
     const json = await req.json()
     const body = inviteMemberSchema.parse(json)
 
+    if (["owner", "trainer"].includes(body.role) && membership.role !== "owner") {
+      return NextResponse.json(
+        { error: "Only organization owners can add trainers or owners" },
+        { status: 403 }
+      )
+    }
+
     const invitedUser = await db.user.findUnique({
       where: { email: body.email },
     })

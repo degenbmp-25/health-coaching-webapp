@@ -53,10 +53,11 @@ export default function TrainerClientsPage() {
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([])
   const [loading, setLoading] = useState(true)
   const [isAddOpen, setIsAddOpen] = useState(false)
-  const [clientEmail, setClientEmail] = useState("")
+  const [memberEmail, setMemberEmail] = useState("")
+  const [memberRole, setMemberRole] = useState<"client" | "trainer">("client")
   const [selectedOrgId, setSelectedOrgId] = useState("")
   const [selectedTrainerId, setSelectedTrainerId] = useState("")
-  const [addingClient, setAddingClient] = useState(false)
+  const [addingMember, setAddingMember] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -123,24 +124,24 @@ export default function TrainerClientsPage() {
     load()
   }, [load])
 
-  async function addClient(event: React.FormEvent) {
+  async function addMember(event: React.FormEvent) {
     event.preventDefault()
-    if (!selectedOrgId || !clientEmail.trim()) return
+    if (!selectedOrgId || !memberEmail.trim()) return
 
-    setAddingClient(true)
+    setAddingMember(true)
     const res = await fetch(`/api/organizations/${selectedOrgId}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: clientEmail.trim(),
-        role: "client",
-        primaryTrainerId: selectedTrainerId || undefined,
+        email: memberEmail.trim(),
+        role: memberRole,
+        primaryTrainerId: memberRole === "client" ? selectedTrainerId || undefined : undefined,
       }),
     })
 
     if (res.ok) {
-      toast({ title: "Client added" })
-      setClientEmail("")
+      toast({ title: memberRole === "client" ? "Client added" : "Trainer added" })
+      setMemberEmail("")
       setIsAddOpen(false)
       await load()
     } else {
@@ -150,10 +151,12 @@ export default function TrainerClientsPage() {
         variant: "destructive",
       })
     }
-    setAddingClient(false)
+    setAddingMember(false)
   }
 
   const selectedOrg = organizations.find((org) => org.id === selectedOrgId)
+  const ownerOrganizations = organizations.filter((org) => org.userRole === "owner")
+  const canAddTrainers = ownerOrganizations.length > 0
 
   if (loading) {
     return (
@@ -168,26 +171,49 @@ export default function TrainerClientsPage() {
       <DashboardHeader heading="My Clients" text="Manage your client roster">
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
-            <Button>Add Client</Button>
+            <Button>Add Member</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Client</DialogTitle>
+              <DialogTitle>Add Member</DialogTitle>
               <DialogDescription>
-                Add a signed-up user to your organization so they can receive programs.
+                Add a signed-up user to your organization as a client or trainer.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={addClient} className="space-y-4">
+            <form onSubmit={addMember} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="client-email">Client email</Label>
+                <Label htmlFor="member-email">Email</Label>
                 <Input
-                  id="client-email"
+                  id="member-email"
                   type="email"
-                  value={clientEmail}
-                  onChange={(event) => setClientEmail(event.target.value)}
-                  placeholder="client@example.com"
+                  value={memberEmail}
+                  onChange={(event) => setMemberEmail(event.target.value)}
+                  placeholder="name@example.com"
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select
+                  value={memberRole}
+                  onValueChange={(value) => {
+                    const nextRole = value as "client" | "trainer"
+                    setMemberRole(nextRole)
+                    if (nextRole === "trainer" && ownerOrganizations.length > 0) {
+                      const nextOrg = ownerOrganizations.find((org) => org.id === selectedOrgId) || ownerOrganizations[0]
+                      setSelectedOrgId(nextOrg.id)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Client</SelectItem>
+                    {canAddTrainers && <SelectItem value="trainer">Trainer</SelectItem>}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -204,7 +230,7 @@ export default function TrainerClientsPage() {
                     <SelectValue placeholder="Choose organization" />
                   </SelectTrigger>
                   <SelectContent>
-                    {organizations.map((org) => (
+                    {(memberRole === "trainer" ? ownerOrganizations : organizations).map((org) => (
                       <SelectItem key={org.id} value={org.id}>
                         {org.name}
                       </SelectItem>
@@ -213,24 +239,26 @@ export default function TrainerClientsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Primary trainer</Label>
-                <Select value={selectedTrainerId} onValueChange={setSelectedTrainerId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose trainer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedOrg?.trainers.map((trainer) => (
-                      <SelectItem key={trainer.id} value={trainer.id}>
-                        {trainer.name || trainer.email} ({trainer.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {memberRole === "client" && (
+                <div className="space-y-2">
+                  <Label>Primary trainer</Label>
+                  <Select value={selectedTrainerId} onValueChange={setSelectedTrainerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose trainer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedOrg?.trainers.map((trainer) => (
+                        <SelectItem key={trainer.id} value={trainer.id}>
+                          {trainer.name || trainer.email} ({trainer.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <Button type="submit" className="w-full" disabled={addingClient || !selectedOrgId}>
-                {addingClient ? "Adding..." : "Add Client"}
+              <Button type="submit" className="w-full" disabled={addingMember || !selectedOrgId}>
+                {addingMember ? "Adding..." : memberRole === "client" ? "Add Client" : "Add Trainer"}
               </Button>
             </form>
           </DialogContent>
@@ -241,7 +269,7 @@ export default function TrainerClientsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center h-48">
             <p className="text-muted-foreground mb-4">No clients yet</p>
-            <Button onClick={() => setIsAddOpen(true)}>Add Client</Button>
+            <Button onClick={() => setIsAddOpen(true)}>Add Member</Button>
           </CardContent>
         </Card>
       ) : (
