@@ -90,12 +90,15 @@ interface WorkoutEditFormProps {
       weight?: number | null
       notes?: string | null
       muxPlaybackId?: string | null
+      organizationVideoId?: string | null
     }[]
   }
   exercises: Exercise[]
   redirectUrl?: string
   videos?: OrganizationVideo[]
   isTrainer?: boolean
+  onSaved?: () => void | Promise<void>
+  submitLabel?: string
 }
 
 export function WorkoutEditForm({ 
@@ -103,7 +106,9 @@ export function WorkoutEditForm({
   exercises, 
   redirectUrl,
   videos = [],
-  isTrainer = false 
+  isTrainer = false,
+  onSaved,
+  submitLabel,
 }: WorkoutEditFormProps) {
   const router = useRouter()
   const [isSaving, setIsSaving] = React.useState<boolean>(false)
@@ -199,7 +204,11 @@ export function WorkoutEditForm({
         description: `"${data.name}" has been saved.`,
       })
 
-      router.push(redirectUrl || (isCreating ? `/dashboard/workouts/${savedWorkoutId}/edit` : `/dashboard/workouts`));
+      if (onSaved) {
+        await onSaved()
+      } else {
+        router.push(redirectUrl || (isCreating ? `/dashboard/workouts/${savedWorkoutId}/edit` : `/dashboard/workouts`));
+      }
       router.refresh()
 
     } catch (error) {
@@ -493,7 +502,7 @@ export function WorkoutEditForm({
 
         <Button type="submit" disabled={isSaving}>
           {isSaving && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-          <span>{workout.id ? "Save Changes" : "Create Workout"}</span>
+          <span>{submitLabel || (workout.id ? "Save Changes" : "Create Workout")}</span>
         </Button>
       </form>
     </Form>

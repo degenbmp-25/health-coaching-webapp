@@ -54,11 +54,8 @@ export async function PATCH(
       where: { id: params.workoutId },
       include: {
         program: {
-          include: {
-            assignments: {
-              where: { clientId: user.id },
-              select: { id: true },
-            },
+          select: {
+            organizationId: true,
           },
         },
       },
@@ -68,12 +65,38 @@ export async function PATCH(
       return new Response("Not Found", { status: 404 })
     }
 
-    // Check authorization: user owns workout OR is assigned to the program
+    // Check authorization: user owns workout OR can train in the program's organization.
+    // Clients assigned to a program may play workouts, but they must not be able to edit the template.
     const isOwner = workout.userId === user.id
-    const isAssignedToProgram = workout.program?.assignments &&
-      workout.program.assignments.length > 0
+    let canManageProgramWorkout = false
 
-    if (!isOwner && !isAssignedToProgram) {
+    if (workout.program?.organizationId) {
+      const membership = await db.organizationMember.findFirst({
+        where: {
+          userId: user.id,
+          organizationId: workout.program.organizationId,
+          role: { in: ["owner", "trainer", "coach"] },
+        },
+        select: { id: true },
+      })
+      canManageProgramWorkout = Boolean(membership)
+    }
+
+    const dbUser = await db.user.findUnique({
+      where: { id: user.id },
+      select: { role: true },
+    })
+    const isCoachOfOwner = dbUser?.role === "coach"
+      ? await db.user.findFirst({
+          where: {
+            id: workout.userId,
+            coachId: user.id,
+          },
+          select: { id: true },
+        })
+      : null
+
+    if (!isOwner && !canManageProgramWorkout && !isCoachOfOwner) {
       return new Response("Forbidden", { status: 403 })
     }
 

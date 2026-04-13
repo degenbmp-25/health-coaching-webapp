@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
+import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -40,6 +41,9 @@ interface Workout {
     sets: number
     reps: number
     weight: number | null
+    notes: string | null
+    muxPlaybackId: string | null
+    organizationVideoId: string | null
     order: number
   }>
 }
@@ -57,7 +61,7 @@ interface Program {
   description: string | null
   startDate: string | null
   totalWeeks: number | null
-  organization: { id: string; name: string }
+  organization: { id: string; name: string; type?: string }
   createdBy: { id: string; name: string | null }
   workouts: Workout[]
   assignments: Array<{
@@ -72,6 +76,26 @@ interface AvailableWorkout {
   name: string
   description: string | null
   exerciseCount: number
+}
+
+interface Exercise {
+  id: string
+  name: string
+  category: string
+  muscleGroup: string
+}
+
+interface OrganizationVideo {
+  id: string
+  organizationId: string
+  muxAssetId: string
+  muxPlaybackId: string | null
+  title: string
+  thumbnailUrl: string | null
+  duration: number | null
+  status: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 export default function TrainerProgramDetailPage({ params }: { params: { id: string } }) {
@@ -94,14 +118,43 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   // Add workouts dialog - week/day assignment
   const [addWorkoutWeek, setAddWorkoutWeek] = useState<number | null>(null)
   const [addWorkoutDay, setAddWorkoutDay] = useState<number | null>(null)
-  // Edit workout week dialog
-  const [editWeekOpen, setEditWeekOpen] = useState(false)
-  const [editWeekWorkout, setEditWeekWorkout] = useState<Workout | null>(null)
-  const [editWeek, setEditWeek] = useState<number | null>(null)
-  const [editDay, setEditDay] = useState<number | null>(null)
-  const [savingWeek, setSavingWeek] = useState(false)
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [videos, setVideos] = useState<OrganizationVideo[]>([])
+  const [loadingEditorAssets, setLoadingEditorAssets] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  async function loadEditorAssets(organizationId: string) {
+    setLoadingEditorAssets(true)
+    try {
+      const [exerciseRes, videosRes] = await Promise.all([
+        fetch("/api/workouts/exercises"),
+        fetch(`/api/organizations/${organizationId}/videos`),
+      ])
+
+      if (exerciseRes.ok) {
+        setExercises(await exerciseRes.json())
+      }
+
+      if (videosRes.ok) {
+        const data = await videosRes.json()
+        setVideos(data.videos || [])
+      }
+    } finally {
+      setLoadingEditorAssets(false)
+    }
+  }
+
+  async function reloadProgram() {
+    const res = await fetch(`/api/programs/${id}`)
+    if (res.ok) {
+      const data = await res.json()
+      setProgram(data)
+      return data as Program
+    }
+    return null
+  }
 
   useEffect(() => {
     async function load() {
@@ -120,6 +173,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       }
       const data = await res.json()
       setProgram(data)
+      await loadEditorAssets(data.organization.id)
       setLoading(false)
     }
     load()
@@ -252,50 +306,6 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     setRemovingWorkoutId(null)
   }
 
-  function openEditWeekDialog(workout: Workout) {
-    setEditWeekWorkout(workout)
-    setEditWeek(workout.weekNumber)
-    setEditDay(workout.dayOfWeek)
-    setEditWeekOpen(true)
-  }
-
-  async function saveWorkoutWeek() {
-    if (!editWeekWorkout) return
-    setSavingWeek(true)
-    
-    const res = await fetch(`/api/workouts/${editWeekWorkout.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: editWeekWorkout.name,
-        description: editWeekWorkout.description,
-        weekNumber: editWeek,
-        dayOfWeek: editDay,
-        exercises: editWeekWorkout.exercises.map(ex => ({
-          exerciseId: ex.exercise.id,
-          sets: ex.sets,
-          reps: ex.reps,
-          weight: ex.weight,
-          order: ex.order,
-        })),
-      }),
-    })
-    
-    if (res.ok) {
-      // Refresh program to get updated workout
-      const programRes = await fetch(`/api/programs/${id}`)
-      if (programRes.ok) {
-        const data = await programRes.json()
-        setProgram(data)
-      }
-      toast({ title: "Workout week updated" })
-      setEditWeekOpen(false)
-    } else {
-      toast({ title: "Failed to update workout week", variant: "destructive" })
-    }
-    setSavingWeek(false)
-  }
-
   function openSettingsDialog() {
     if (program) {
       // Format date for input (YYYY-MM-DD)
@@ -305,6 +315,26 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       setStartDate(dateValue)
       setTotalWeeks(program.totalWeeks ?? "")
       setSettingsOpen(true)
+    }
+  }
+
+  function getWorkoutFormData(workout: Workout) {
+    return {
+      id: workout.id,
+      name: workout.name,
+      description: workout.description,
+      weekNumber: workout.weekNumber,
+      dayOfWeek: workout.dayOfWeek,
+      exercises: workout.exercises.map((workoutExercise) => ({
+        id: workoutExercise.exercise.id,
+        name: workoutExercise.exercise.name,
+        sets: workoutExercise.sets,
+        reps: workoutExercise.reps,
+        weight: workoutExercise.weight,
+        notes: workoutExercise.notes,
+        muxPlaybackId: workoutExercise.muxPlaybackId,
+        organizationVideoId: workoutExercise.organizationVideoId,
+      })),
     }
   }
 
@@ -408,9 +438,9 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openEditWeekDialog(workout)}
+                          onClick={() => setEditingWorkout(workout)}
                         >
-                          Edit Week
+                          Edit Workout
                         </Button>
                         <Button
                           variant="ghost"
@@ -639,59 +669,31 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
         </DialogContent>
       </Dialog>
 
-      {/* Edit Workout Week Dialog */}
-      <Dialog open={editWeekOpen} onOpenChange={setEditWeekOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={editingWorkout !== null} onOpenChange={(open) => !open && setEditingWorkout(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Edit Workout Week</DialogTitle>
+            <DialogTitle>Edit Workout</DialogTitle>
             <DialogDescription>
-              {editWeekWorkout?.name}
+              Changes here update the same workout clients see and start from their program.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Week Number</Label>
-              <Select
-                value={editWeek === null ? "none" : String(editWeek)}
-                onValueChange={(v) => setEditWeek(v === "none" ? null : Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {Array.from({ length: program.totalWeeks || 12 }, (_, i) => i + 1).map(w => (
-                    <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Day of Week</Label>
-              <Select
-                value={editDay === null ? "none" : String(editDay)}
-                onValueChange={(v) => setEditDay(v === "none" ? null : Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
-                    <SelectItem key={i} value={String(i)}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setEditWeekOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveWorkoutWeek} disabled={savingWeek}>
-              {savingWeek ? "Saving..." : "Save"}
-            </Button>
-          </div>
+          {editingWorkout ? (
+            loadingEditorAssets ? (
+              <div className="py-8 text-center text-muted-foreground">Loading editor...</div>
+            ) : (
+              <WorkoutEditForm
+                workout={getWorkoutFormData(editingWorkout)}
+                exercises={exercises}
+                videos={videos}
+                isTrainer
+                submitLabel="Save Program Workout"
+                onSaved={async () => {
+                  await reloadProgram()
+                  setEditingWorkout(null)
+                }}
+              />
+            )
+          ) : null}
         </DialogContent>
       </Dialog>
     </Shell>
