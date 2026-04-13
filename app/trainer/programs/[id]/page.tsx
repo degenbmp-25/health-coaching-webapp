@@ -186,7 +186,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
     setAssigning(true)
     
     // Find client by email
-    const clientRes = await fetch(`/api/users?email=${encodeURIComponent(assignEmail)}`)
+    const clientRes = await fetch(`/api/users/search?query=${encodeURIComponent(assignEmail)}`)
     if (!clientRes.ok) {
       toast({ title: "User not found", variant: "destructive" })
       setAssigning(false)
