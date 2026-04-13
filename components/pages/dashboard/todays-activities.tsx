@@ -164,11 +164,11 @@ export function TodaysActivities({ userId, activities }: TodaysActivitiesProps) 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              Today&apos;s Schedule
+              <CalendarDays className="h-5 w-5 shrink-0 text-primary" />
+              <span className="min-w-0 truncate">Today&apos;s Schedule</span>
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">{todayName}</p>
           </div>
@@ -217,7 +217,7 @@ export function TodaysActivities({ userId, activities }: TodaysActivitiesProps) 
                       : "bg-card hover:bg-accent/50 border-border"
                   )}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex min-w-0 items-center justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         onClick={() => handleQuickLog(activity.id)}
@@ -266,7 +266,7 @@ export function TodaysActivities({ userId, activities }: TodaysActivitiesProps) 
                       disabled={loggingActivity === activity.id}
                       size="sm"
                       variant="ghost"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="hidden shrink-0 transition-opacity sm:inline-flex sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Log
@@ -278,10 +278,10 @@ export function TodaysActivities({ userId, activities }: TodaysActivitiesProps) 
             
             {todaysActivities.length > 0 && (
               <div className="mt-4 p-3 rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                    <span className="text-sm text-muted-foreground">
+                    <span className="min-w-0 break-words text-sm text-muted-foreground">
                       Progress: {todaysActivities.filter(a => isActivityComplete(a)).length}/{todaysActivities.length} activities
                     </span>
                   </div>

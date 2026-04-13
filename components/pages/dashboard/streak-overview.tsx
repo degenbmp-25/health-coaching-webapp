@@ -180,10 +180,10 @@ export function StreakOverview({ logs, streak }: StreakOverviewProps) {
           motivation.type === 'success' && "text-green-600",
           motivation.type === 'info' && "text-blue-600"
         )} />
-        <AlertDescription className="flex items-center justify-between">
-          <span>{motivation.message}</span>
+        <AlertDescription className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0 break-words">{motivation.message}</span>
           <Link href="/dashboard/activities?new=1">
-            <Button size="sm" variant="outline" className="ml-4">
+            <Button size="sm" variant="outline" className="w-full sm:w-auto">
               {motivation.action}
             </Button>
           </Link>
@@ -193,10 +193,10 @@ export function StreakOverview({ logs, streak }: StreakOverviewProps) {
       {/* Activity Timeline */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex min-w-0 items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Activity Timeline
+              <span className="min-w-0 truncate">Activity Timeline</span>
             </CardTitle>
             <div className="flex gap-2">
               <Button 
@@ -256,7 +256,7 @@ export function StreakOverview({ logs, streak }: StreakOverviewProps) {
           </div>
           
           {/* Legend */}
-          <div className="flex items-center justify-center gap-6 mt-4 text-sm">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm sm:gap-6">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 bg-red-100 border border-red-200 rounded"></div>
               <span>No activity</span>
@@ -274,4 +274,4 @@ export function StreakOverview({ logs, streak }: StreakOverviewProps) {
       </Card>
     </div>
   )
-} 
+}
