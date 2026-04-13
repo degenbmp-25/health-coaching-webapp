@@ -66,9 +66,10 @@ function parseCSV(csv: string): string[][] {
 }
 
 function extractVideoUrl(notes: string): string | undefined {
-  // Look for video file references in notes.
-  const match = notes.match(/([a-zA-Z0-9_.-]+\.(MOV|MP4|mov|mp4))/);
-  return match ? match[0] : undefined;
+  // Look for a file/path that ends in a supported media extension.
+  // Sheet notes often include spaces or folders, e.g. "book opener.MOV" or "SMR trap/shoulder.MOV".
+  const match = notes.match(/(?:^|[\s,;])([^\n,;]*?\.(?:MOV|MP4|HEIC))/i);
+  return match ? match[1].trim() : undefined;
 }
 
 function parseSetsReps(value: string): { sets: number; reps: number; repsText: string } {
