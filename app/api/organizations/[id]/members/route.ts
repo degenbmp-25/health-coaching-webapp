@@ -12,6 +12,7 @@ const routeContextSchema = z.object({
 const inviteMemberSchema = z.object({
   email: z.string().email(),
   role: z.enum(["owner", "trainer", "client"]),
+  primaryTrainerId: z.string().min(1).optional().nullable(),
 })
 
 const updateMemberSchema = z.object({
@@ -122,6 +123,27 @@ export async function POST(
       )
     }
 
+    let primaryTrainerId: string | null = null
+    if (body.role === "client") {
+      primaryTrainerId = body.primaryTrainerId ?? user.id
+
+      const trainerMembership = await db.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: params.id,
+            userId: primaryTrainerId,
+          },
+        },
+      })
+
+      if (!trainerMembership || !["owner", "trainer"].includes(trainerMembership.role)) {
+        return NextResponse.json(
+          { error: "Primary trainer must be an owner or trainer in this organization" },
+          { status: 400 }
+        )
+      }
+    }
+
     const newMembership = await db.organizationMember.create({
       data: {
         organizationId: params.id,
@@ -139,9 +161,7 @@ export async function POST(
       where: { id: invitedUser.id },
       data: {
         organizationRole: body.role,
-        ...(body.role === "client" && membership.role === "trainer"
-          ? { primaryTrainerId: user.id }
-          : {}),
+        ...(body.role === "client" ? { primaryTrainerId } : {}),
       },
     })
 
