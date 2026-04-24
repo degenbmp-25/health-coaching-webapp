@@ -99,7 +99,10 @@ export async function getUserWorkouts(userId: string) {
 
   return await db.workout.findMany({
     where: {
-      programId: { in: programIds },
+      OR: [
+        { userId },
+        { programId: { in: programIds } },
+      ],
     },
     include: {
       exercises: {
