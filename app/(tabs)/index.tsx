@@ -1,51 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-
-interface Workout {
-  id: string;
-  name: string;
-  duration: number;
-  exercises: Exercise[];
-  completed: boolean;
-}
-
-interface Exercise {
-  id: string;
-  name: string;
-  sets: number;
-  reps: number;
-  weight: number;
-  completed: boolean;
-}
-
-// Mock data for demonstration
-const mockWorkout: Workout = {
-  id: '1',
-  name: 'Upper Body Strength',
-  duration: 45,
-  exercises: [
-    { id: 'e1', name: 'Bench Press', sets: 4, reps: 8, weight: 135, completed: false },
-    { id: 'e2', name: 'Bent Over Row', sets: 4, reps: 10, weight: 95, completed: false },
-    { id: 'e3', name: 'Shoulder Press', sets: 3, reps: 10, weight: 65, completed: false },
-    { id: 'e4', name: 'Bicep Curls', sets: 3, reps: 12, weight: 25, completed: false },
-  ],
-  completed: false,
-};
+import { getTodaysWorkout } from '../lib/api';
+import type { Workout, Exercise } from '../types';
 
 export default function HomeScreen() {
   const { isSignedIn, userId } = useAuth();
   const router = useRouter();
-  const [workout, setWorkout] = useState<Workout | null>(mockWorkout);
+  const [workout, setWorkout] = useState<Workout | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [streak, setStreak] = useState(7);
+
+  useEffect(() => {
+    if (userId) {
+      fetchTodaysWorkout();
+    }
+  }, [userId]);
+
+  const fetchTodaysWorkout = async () => {
+    if (!userId) return;
+
+    setLoading(true);
+    setError(null);
+
+    const response = await getTodaysWorkout(userId);
+
+    if (response.success && response.data) {
+      setWorkout(response.data);
+    } else if (response.error) {
+      // If API fails, we'll show no workout - don't use mock data
+      setError(response.error);
+      setWorkout(null);
+    }
+
+    setLoading(false);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await fetchTodaysWorkout();
     setRefreshing(false);
   };
 
@@ -56,19 +61,60 @@ export default function HomeScreen() {
     }
   };
 
-  const toggleExerciseComplete = (exerciseId: string) => {
+  const toggleExerciseComplete = async (exerciseId: string) => {
+    if (!userId || !workout) return;
+
+    const exercise = workout.exercises.find((ex) => ex.id === exerciseId);
+    if (!exercise) return;
+
+
+    const newCompletedSets = exercise.completedSets >= exercise.sets ? 0 : exercise.completedSets + 1;
+    const wasCompleted = exercise.completedSets >= exercise.sets;
+    const setNumber = wasCompleted ? 0 : exercise.completedSets + 1;
+
+
     Haptics.selectionAsync();
-    if (workout) {
-      setWorkout({
-        ...workout,
-        exercises: workout.exercises.map(ex =>
-          ex.id === exerciseId ? { ...ex, completed: !ex.completed } : ex
+
+    // Optimistic update
+    setWorkout((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        exercises: prev.exercises.map((ex) =>
+          ex.id === exerciseId
+            ? { ...ex, completedSets: newCompletedSets }
+            : ex
         ),
+      };
+    });
+
+    // Persist to backend
+    const response = await logExercise(exerciseId, {
+      exerciseId,
+      setNumber,
+      reps: exercise.reps,
+      weight: exercise.weight,
+    });
+
+    if (!response.success) {
+      // Rollback on failure
+      setWorkout((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          exercises: prev.exercises.map((ex) =>
+            ex.id === exerciseId
+              ? { ...ex, completedSets: exercise.completedSets }
+              : ex
+          ),
+        };
       });
     }
   };
 
-  const completedCount = workout?.exercises.filter(e => e.completed).length || 0;
+  const completedCount = workout?.exercises.filter(
+    (e) => e.completedSets >= e.sets
+  ).length || 0;
   const totalExercises = workout?.exercises.length || 0;
 
   return (
@@ -77,7 +123,11 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4a90d9" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#4a90d9"
+          />
         }
       >
         {/* Header */}
@@ -97,56 +147,102 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Loading State */}
+        {loading && (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#4a90d9" />
+            <Text style={styles.loadingText}>Loading today's workout...</Text>
+          </View>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorTitle}>No Workout Available</Text>
+            <Text style={styles.errorText}>
+              {error}. Check back later or contact your trainer.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+              <Text style={styles.retryButtonText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Today's Workout Card */}
-        <View style={styles.workoutCard}>
-          <View style={styles.workoutHeader}>
-            <Text style={styles.workoutTitle}>Today's Workout</Text>
-            <Text style={styles.workoutDuration}>{workout?.duration} min</Text>
-          </View>
-          
-          <Text style={styles.workoutName}>{workout?.name}</Text>
-          
-          <View style={styles.progressBar}>
-            <View 
-              style={[styles.progressFill, { width: `${(completedCount / totalExercises) * 100}%` }]} 
-            />
-          </View>
-          <Text style={styles.progressText}>
-            {completedCount}/{totalExercises} exercises completed
-          </Text>
+        {!loading && !error && workout && (
+          <View style={styles.workoutCard}>
+            <View style={styles.workoutHeader}>
+              <Text style={styles.workoutTitle}>Today's Workout</Text>
+              <Text style={styles.workoutDuration}>{workout.duration} min</Text>
+            </View>
 
-          {/* Exercise Preview */}
-          <View style={styles.exerciseList}>
-            {workout?.exercises.slice(0, 3).map((exercise) => (
-              <TouchableOpacity
-                key={exercise.id}
-                style={styles.exerciseItem}
-                onPress={() => toggleExerciseComplete(exercise.id)}
-              >
-                <View style={styles.exerciseCheck}>
-                  <Text style={exercise.completed ? styles.checkCompleted : styles.checkEmpty}>
-                    {exercise.completed ? '✓' : '○'}
-                  </Text>
-                </View>
-                <View style={styles.exerciseInfo}>
-                  <Text style={[styles.exerciseName, exercise.completed && styles.exerciseCompleted]}>
-                    {exercise.name}
-                  </Text>
-                  <Text style={styles.exerciseSets}>
-                    {exercise.sets} sets × {exercise.reps} reps @ {exercise.weight}lbs
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-            {totalExercises > 3 && (
-              <Text style={styles.moreExercises}>+{totalExercises - 3} more exercises</Text>
-            )}
-          </View>
+            <Text style={styles.workoutName}>{workout.name}</Text>
 
-          <TouchableOpacity style={styles.startButton} onPress={startWorkout}>
-            <Text style={styles.startButtonText}>Start Workout</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {completedCount}/{totalExercises} exercises completed
+            </Text>
+
+            {/* Exercise Preview */}
+            <View style={styles.exerciseList}>
+              {workout.exercises.slice(0, 3).map((exercise) => {
+                const isCompleted = exercise.completedSets >= exercise.sets;
+                return (
+                  <TouchableOpacity
+                    key={exercise.id}
+                    style={styles.exerciseItem}
+                    onPress={() => toggleExerciseComplete(exercise.id)}
+                  >
+                    <View style={styles.exerciseCheck}>
+                      <Text style={isCompleted ? styles.checkCompleted : styles.checkEmpty}>
+                        {isCompleted ? '✓' : '○'}
+                      </Text>
+                    </View>
+                    <View style={styles.exerciseInfo}>
+                      <Text
+                        style={[
+                          styles.exerciseName,
+                          isCompleted && styles.exerciseCompleted,
+                        ]}
+                      >
+                        {exercise.name}
+                      </Text>
+                      <Text style={styles.exerciseSets}>
+                        {exercise.sets} sets × {exercise.reps} reps @ {exercise.weight}lbs
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              {totalExercises > 3 && (
+                <Text style={styles.moreExercises}>+{totalExercises - 3} more exercises</Text>
+              )}
+            </View>
+
+            <TouchableOpacity style={styles.startButton} onPress={startWorkout}>
+              <Text style={styles.startButtonText}>Start Workout</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* No Workout State */}
+        {!loading && !error && !workout && (
+          <View style={styles.noWorkoutCard}>
+            <Text style={styles.noWorkoutIcon}>🏋️</Text>
+            <Text style={styles.noWorkoutTitle}>No Workout Scheduled</Text>
+            <Text style={styles.noWorkoutText}>
+              You don't have a workout for today. Great rest day or check with your trainer!
+            </Text>
+          </View>
+        )}
 
         {/* Quick Stats */}
         <View style={styles.statsRow}>
@@ -222,6 +318,54 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   streakButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  loadingCard: {
+    backgroundColor: '#16213e',
+    borderRadius: 16,
+    padding: 40,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#7f8c8d',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  errorCard: {
+    backgroundColor: '#16213e',
+    borderRadius: 16,
+    padding: 30,
+    marginBottom: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e94560',
+  },
+  errorIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#e94560',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  retryButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
@@ -325,6 +469,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  noWorkoutCard: {
+    backgroundColor: '#16213e',
+    borderRadius: 16,
+    padding: 40,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  noWorkoutIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  noWorkoutTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  noWorkoutText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
