@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Habithletics",
+    "slug": "habithletics-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "habithletics",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.habithletics.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Habithletics needs camera access for form check photos",
+        "NSHealthShareUsageDescription": "Habithletics syncs workout data with Apple Health",
+        "NSHealthUpdateUsageDescription": "Habithletics writes workout data to Apple Health"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.habithletics.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4a90d9"
+        }
+      ],
+      [
+        "@clerk/clerk-expo",
+        {
+          " publishableKey": "KEY_PLACEHOLDER"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
