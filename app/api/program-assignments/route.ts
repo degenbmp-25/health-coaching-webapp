@@ -8,6 +8,10 @@ const createAssignmentSchema = z.object({
   clientId: z.string().min(1),
 })
 
+const deleteAssignmentSchema = z.object({
+  assignmentId: z.string().min(1),
+})
+
 // POST /api/program-assignments - Assign program to client
 export async function POST(req: Request) {
   try {
@@ -151,6 +155,63 @@ export async function GET(req: Request) {
     return NextResponse.json(assignments)
   } catch (error) {
     console.error("Error fetching assignments:", error)
+    return new Response("Internal Server Error", { status: 500 })
+  }
+}
+
+// DELETE /api/program-assignments - Remove a client's access to a program
+export async function DELETE(req: Request) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return new Response("Unauthorized", { status: 403 })
+    }
+
+    const json = await req.json()
+    const body = deleteAssignmentSchema.parse(json)
+
+    const assignment = await db.programAssignment.findUnique({
+      where: { id: body.assignmentId },
+      include: {
+        program: {
+          select: {
+            id: true,
+            organizationId: true,
+          },
+        },
+      },
+    })
+
+    if (!assignment) {
+      return NextResponse.json(
+        { error: "Assignment not found" },
+        { status: 404 }
+      )
+    }
+
+    const membership = await db.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: assignment.program.organizationId,
+          userId: user.id,
+        },
+      },
+    })
+
+    if (!membership || !["owner", "trainer"].includes(membership.role)) {
+      return new Response("Forbidden", { status: 403 })
+    }
+
+    await db.programAssignment.delete({
+      where: { id: body.assignmentId },
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(error.issues, { status: 422 })
+    }
+    console.error("Error deleting assignment:", error)
     return new Response("Internal Server Error", { status: 500 })
   }
 }

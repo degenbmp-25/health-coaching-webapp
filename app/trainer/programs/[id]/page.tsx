@@ -105,6 +105,7 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
   const [loading, setLoading] = useState(true)
   const [assignEmail, setAssignEmail] = useState("")
   const [assigning, setAssigning] = useState(false)
+  const [removingAssignmentId, setRemovingAssignmentId] = useState<string | null>(null)
   const [addWorkoutsOpen, setAddWorkoutsOpen] = useState(false)
   const [availableWorkouts, setAvailableWorkouts] = useState<AvailableWorkout[]>([])
   const [selectedWorkoutIds, setSelectedWorkoutIds] = useState<string[]>([])
@@ -220,6 +221,37 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
       toast({ title: error.error || "Failed to assign", variant: "destructive" })
     }
     setAssigning(false)
+  }
+
+  async function removeAssignment(assignmentId: string) {
+    if (!program) return
+
+    setRemovingAssignmentId(assignmentId)
+
+    const res = await fetch("/api/program-assignments", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignmentId }),
+    })
+
+    if (res.ok) {
+      setProgram({
+        ...program,
+        assignments: program.assignments.filter((assignment) => assignment.id !== assignmentId),
+      })
+      toast({ title: "Client removed from program" })
+    } else {
+      let message = "Failed to remove client"
+      try {
+        const error = await res.json()
+        message = error.error || message
+      } catch {
+        // Keep the fallback message when the server returns plain text.
+      }
+      toast({ title: message, variant: "destructive" })
+    }
+
+    setRemovingAssignmentId(null)
   }
 
   async function openAddWorkoutsDialog() {
@@ -493,11 +525,22 @@ export default function TrainerProgramDetailPage({ params }: { params: { id: str
                 <h4 className="font-medium text-sm mb-2">Assigned Clients</h4>
                 <div className="space-y-2">
                   {program.assignments.map((assignment) => (
-                    <div key={assignment.id} className="flex items-center justify-between text-sm">
-                      <span>{assignment.client.name || assignment.client.email}</span>
-                      <Badge variant="secondary">
-                        {new Date(assignment.startedAt).toLocaleDateString()}
-                      </Badge>
+                    <div key={assignment.id} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate">{assignment.client.name || assignment.client.email}</div>
+                        <Badge variant="secondary">
+                          {new Date(assignment.startedAt).toLocaleDateString()}
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAssignment(assignment.id)}
+                        disabled={removingAssignmentId === assignment.id}
+                      >
+                        {removingAssignmentId === assignment.id ? "Removing..." : "Remove"}
+                      </Button>
                     </div>
                   ))}
                 </div>
