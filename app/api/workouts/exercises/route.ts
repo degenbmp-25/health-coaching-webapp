@@ -9,11 +9,11 @@ export async function GET() {
   const authRes = await requireAuth();
   if (authRes instanceof NextResponse) return authRes;
   try {
-    const exercises = await getExercises()
+    const exercises = await getExercises(authRes.id)
     
     return NextResponse.json(exercises)
   } catch (error) {
     console.error("[EXERCISES_GET]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
-} 
+}

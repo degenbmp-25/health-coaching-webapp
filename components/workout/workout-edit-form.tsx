@@ -140,8 +140,22 @@ export function WorkoutEditForm({
     control: form.control,
   })
 
+  const selectableExercises = React.useMemo(() => {
+    const exerciseIds = new Set(exercises.map((exercise) => exercise.id))
+    const currentWorkoutExercises = (workout.exercises || [])
+      .filter((exercise) => !exerciseIds.has(exercise.id))
+      .map((exercise) => ({
+        id: exercise.id,
+        name: exercise.name,
+        category: "Current workout",
+        muscleGroup: "Current workout",
+      }))
+
+    return [...currentWorkoutExercises, ...exercises]
+  }, [exercises, workout.exercises])
+
   // Group exercises by category
-  const exercisesByCategory = exercises.reduce((acc, exercise) => {
+  const exercisesByCategory = selectableExercises.reduce((acc, exercise) => {
     const categoryKey = exercise.category?.trim();
     if (!categoryKey) {
       return acc; // Skip exercises without a valid category

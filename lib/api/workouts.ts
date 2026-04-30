@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client"
 
 import { db } from "@/lib/db"
+import { dedupeExerciseOptions } from "@/lib/exercises"
 
 // Role constants to avoid magic strings
 const ROLE = {
@@ -301,10 +302,30 @@ export async function getStudentWorkout(workoutId: string, studentId: string, co
   })
 }
 
-export async function getExercises() {
-  return await db.exercise.findMany({
-    orderBy: {
-      name: "asc",
+export async function getExercises(userId?: string) {
+  const exercises = await db.exercise.findMany({
+    where: userId
+      ? {
+          OR: [
+            { userId: null },
+            { userId },
+          ],
+        }
+      : undefined,
+    include: {
+      _count: {
+        select: {
+          workoutExercises: true,
+        },
+      },
     },
+    orderBy: [
+      { category: "asc" },
+      { muscleGroup: "asc" },
+      { name: "asc" },
+      { createdAt: "asc" },
+    ],
   })
+
+  return dedupeExerciseOptions(exercises)
 }
