@@ -32,6 +32,13 @@ import { toast } from "@/components/ui/use-toast"
 import { Icons } from "@/components/icons"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const workoutFormSchema = z.object({
   name: z.string().min(3, {
@@ -112,6 +119,21 @@ export function WorkoutEditForm({
 }: WorkoutEditFormProps) {
   const router = useRouter()
   const [isSaving, setIsSaving] = React.useState<boolean>(false)
+  const [exerciseOptions, setExerciseOptions] = React.useState<Exercise[]>(exercises)
+  const [createExerciseOpen, setCreateExerciseOpen] = React.useState(false)
+  const [createExerciseIndex, setCreateExerciseIndex] = React.useState<number | null>(null)
+  const [isCreatingExercise, setIsCreatingExercise] = React.useState(false)
+  const [newExercise, setNewExercise] = React.useState({
+    name: "",
+    category: "",
+    muscleGroup: "",
+    equipment: "",
+    description: "",
+  })
+
+  React.useEffect(() => {
+    setExerciseOptions(exercises)
+  }, [exercises])
 
   // Filter to only ready videos with valid muxPlaybackId
   const readyVideos = videos.filter(v => v.status === 'ready' && v.muxPlaybackId != null)
@@ -141,7 +163,7 @@ export function WorkoutEditForm({
   })
 
   const selectableExercises = React.useMemo(() => {
-    const exerciseIds = new Set(exercises.map((exercise) => exercise.id))
+    const exerciseIds = new Set(exerciseOptions.map((exercise) => exercise.id))
     const currentWorkoutExercises = (workout.exercises || [])
       .filter((exercise) => !exerciseIds.has(exercise.id))
       .map((exercise) => ({
@@ -151,8 +173,8 @@ export function WorkoutEditForm({
         muscleGroup: "Current workout",
       }))
 
-    return [...currentWorkoutExercises, ...exercises]
-  }, [exercises, workout.exercises])
+    return [...currentWorkoutExercises, ...exerciseOptions]
+  }, [exerciseOptions, workout.exercises])
 
   // Group exercises by category
   const exercisesByCategory = selectableExercises.reduce((acc, exercise) => {
@@ -166,6 +188,80 @@ export function WorkoutEditForm({
     acc[categoryKey].push(exercise)
     return acc
   }, {} as Record<string, Exercise[]>)
+
+  function openCreateExercise(index: number) {
+    setCreateExerciseIndex(index)
+    setNewExercise({
+      name: "",
+      category: "",
+      muscleGroup: "",
+      equipment: "",
+      description: "",
+    })
+    setCreateExerciseOpen(true)
+  }
+
+  async function createExercise() {
+    if (!newExercise.name.trim() || !newExercise.category.trim() || !newExercise.muscleGroup.trim()) {
+      toast({
+        title: "Exercise needs a little more info.",
+        description: "Name, category, and muscle group are required.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsCreatingExercise(true)
+
+    try {
+      const response = await fetch("/api/exercises", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newExercise.name.trim(),
+          category: newExercise.category.trim(),
+          muscleGroup: newExercise.muscleGroup.trim(),
+          equipment: newExercise.equipment.trim() || undefined,
+          description: newExercise.description.trim() || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Exercise was not created.")
+      }
+
+      const createdExercise = await response.json()
+      setExerciseOptions((current) => {
+        if (current.some((exercise) => exercise.id === createdExercise.id)) {
+          return current
+        }
+
+        return [...current, createdExercise].sort((a, b) => a.name.localeCompare(b.name))
+      })
+
+      if (createExerciseIndex !== null) {
+        form.setValue(`exercises.${createExerciseIndex}.exerciseId`, createdExercise.id, {
+          shouldDirty: true,
+          shouldValidate: true,
+        })
+      }
+
+      toast({
+        title: "Exercise created",
+        description: `${createdExercise.name} is ready to use.`,
+      })
+
+      setCreateExerciseOpen(false)
+    } catch (error) {
+      toast({
+        title: "Something went wrong.",
+        description: error instanceof Error ? error.message : "Exercise was not created.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCreatingExercise(false)
+    }
+  }
 
   async function onSubmit(data: FormData) {
     setIsSaving(true)
@@ -378,7 +474,7 @@ export function WorkoutEditForm({
                           <FormLabel>Exercise</FormLabel>
                           <Select
                             onValueChange={field.onChange}
-                            defaultValue={field.value}
+                            value={field.value}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -404,6 +500,14 @@ export function WorkoutEditForm({
                               </ScrollArea>
                             </SelectContent>
                           </Select>
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-xs"
+                            onClick={() => openCreateExercise(index)}
+                          >
+                            Create a new exercise
+                          </Button>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -519,6 +623,70 @@ export function WorkoutEditForm({
           <span>{submitLabel || (workout.id ? "Save Changes" : "Create Workout")}</span>
         </Button>
       </form>
+
+      <Dialog open={createExerciseOpen} onOpenChange={setCreateExerciseOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Exercise</DialogTitle>
+            <DialogDescription>
+              Add it once, then use it in this workout and future programs.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <FormLabel>Name</FormLabel>
+              <Input
+                value={newExercise.name}
+                onChange={(event) => setNewExercise((current) => ({ ...current, name: event.target.value }))}
+                placeholder="e.g. Half-kneeling cable chop"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <FormLabel>Category</FormLabel>
+                <Input
+                  value={newExercise.category}
+                  onChange={(event) => setNewExercise((current) => ({ ...current, category: event.target.value }))}
+                  placeholder="e.g. Strength"
+                />
+              </div>
+              <div className="space-y-2">
+                <FormLabel>Muscle Group</FormLabel>
+                <Input
+                  value={newExercise.muscleGroup}
+                  onChange={(event) => setNewExercise((current) => ({ ...current, muscleGroup: event.target.value }))}
+                  placeholder="e.g. Core"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <FormLabel>Equipment</FormLabel>
+              <Input
+                value={newExercise.equipment}
+                onChange={(event) => setNewExercise((current) => ({ ...current, equipment: event.target.value }))}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <FormLabel>Description</FormLabel>
+              <Textarea
+                value={newExercise.description}
+                onChange={(event) => setNewExercise((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Optional coaching notes"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateExerciseOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={createExercise} disabled={isCreatingExercise}>
+                {isCreatingExercise && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+                Create Exercise
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Form>
   )
 }
