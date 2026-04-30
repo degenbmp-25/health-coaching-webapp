@@ -1,4 +1,7 @@
+import type { Prisma } from "@prisma/client"
+
 import { db } from "@/lib/db"
+import { dedupeExerciseOptions } from "@/lib/exercises"
 
 // Role constants to avoid magic strings
 const ROLE = {
@@ -6,6 +9,12 @@ const ROLE = {
   TRAINER: "trainer",
   CLIENT: "client",
 } as const
+
+const PROGRAM_WORKOUT_ORDER: Prisma.WorkoutOrderByWithRelationInput[] = [
+  { weekNumber: "asc" },
+  { dayOfWeek: "asc" },
+  { createdAt: "asc" },
+]
 
 /**
  * Get workouts for a user with multi-tenant awareness.
@@ -30,7 +39,7 @@ export async function getUserWorkouts(userId: string) {
           orderBy: { order: "asc" },
         },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: PROGRAM_WORKOUT_ORDER,
     });
   }
 
@@ -60,7 +69,7 @@ export async function getUserWorkouts(userId: string) {
           },
           user: { select: { id: true, name: true } },
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: PROGRAM_WORKOUT_ORDER,
       });
     }
 
@@ -75,7 +84,7 @@ export async function getUserWorkouts(userId: string) {
         },
         user: { select: { id: true, name: true } },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: PROGRAM_WORKOUT_ORDER,
     });
   }
 
@@ -91,7 +100,10 @@ export async function getUserWorkouts(userId: string) {
 
   return await db.workout.findMany({
     where: {
-      programId: { in: programIds },
+      OR: [
+        { userId },
+        { programId: { in: programIds } },
+      ],
     },
     include: {
       exercises: {
@@ -100,7 +112,7 @@ export async function getUserWorkouts(userId: string) {
       },
       user: { select: { id: true, name: true } },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: PROGRAM_WORKOUT_ORDER,
   });
 }
 
@@ -290,10 +302,30 @@ export async function getStudentWorkout(workoutId: string, studentId: string, co
   })
 }
 
-export async function getExercises() {
-  return await db.exercise.findMany({
-    orderBy: {
-      name: "asc",
+export async function getExercises(userId?: string) {
+  const exercises = await db.exercise.findMany({
+    where: userId
+      ? {
+          OR: [
+            { userId: null },
+            { userId },
+          ],
+        }
+      : undefined,
+    include: {
+      _count: {
+        select: {
+          workoutExercises: true,
+        },
+      },
     },
+    orderBy: [
+      { category: "asc" },
+      { muscleGroup: "asc" },
+      { name: "asc" },
+      { createdAt: "asc" },
+    ],
   })
+
+  return dedupeExerciseOptions(exercises)
 }

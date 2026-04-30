@@ -1,9 +1,35 @@
 import { NextResponse } from 'next/server';
-import { env } from '@/env.mjs';
+import { createHash } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
+function envDiagnostic(value: string | undefined) {
+  if (!value) {
+    return {
+      present: false,
+      length: 0,
+      fingerprint: null,
+      hasLeadingOrTrailingWhitespace: false,
+      containsNewline: false,
+    };
+  }
+
+  return {
+    present: true,
+    length: value.length,
+    fingerprint: createHash('sha256').update(value).digest('hex').slice(0, 12),
+    hasLeadingOrTrailingWhitespace: value !== value.trim(),
+    containsNewline: /[\r\n]/.test(value),
+  };
+}
+
 export async function GET() {
+  const rawMuxTokenId = process.env.MUX_TOKEN_ID;
+  const rawMuxTokenSecret = process.env.MUX_TOKEN_SECRET;
+  const rawMuxWebhookSecret = process.env.MUX_WEBHOOK_SECRET;
+  const muxTokenId = rawMuxTokenId?.trim();
+  const muxTokenSecret = rawMuxTokenSecret?.trim();
+
   const results = {
     timestamp: new Date().toISOString(),
     checks: {
@@ -11,12 +37,17 @@ export async function GET() {
       authentication: { status: 'unknown' as 'ok' | 'failed' | 'error' },
       writePermissions: { status: 'unknown' as 'ok' | 'failed' | 'error' },
     },
+    diagnostics: {
+      muxTokenId: envDiagnostic(rawMuxTokenId),
+      muxTokenSecret: envDiagnostic(rawMuxTokenSecret),
+      muxWebhookSecret: envDiagnostic(rawMuxWebhookSecret),
+    },
     healthy: false,
     error: null as string | null
   };
 
   // Check 1: Credentials present
-  if (!env.MUX_TOKEN_ID || !env.MUX_TOKEN_SECRET) {
+  if (!muxTokenId || !muxTokenSecret) {
     results.checks.credentials.status = 'missing';
     results.error = 'Missing MUX_TOKEN_ID or MUX_TOKEN_SECRET';
     return NextResponse.json(results, { status: 500 });
@@ -28,7 +59,7 @@ export async function GET() {
     const authResponse = await fetch('https://api.mux.com/video/v1/assets', {
       method: 'GET',
       headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')
       }
     });
 
@@ -53,7 +84,7 @@ export async function GET() {
     const uploadResponse = await fetch('https://api.mux.com/video/v1/uploads', {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64'),
+        'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64'),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -73,7 +104,7 @@ export async function GET() {
         await fetch(`https://api.mux.com/video/v1/uploads/${uploadData.data.id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': 'Basic ' + Buffer.from(`${env.MUX_TOKEN_ID}:${env.MUX_TOKEN_SECRET}`).toString('base64')
+            'Authorization': 'Basic ' + Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')
           }
         });
       }

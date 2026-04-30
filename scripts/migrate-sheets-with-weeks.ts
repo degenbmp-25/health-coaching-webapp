@@ -19,15 +19,17 @@ const prisma = new PrismaClient();
 const ORGANIZATION_NAME = 'Habithletics Gym';
 const PROGRAM_NAME = 'Strength & Conditioning';
 
-// Each week column group spans this many columns
-// Structure per week: Date, Behavior notes, Other notes, Sets/Reps, Load1, Load2, Load3, Load4, Load5, Tempo, Rest, Notes
-const COLS_PER_WEEK = 11;
+// Exercise name is in column 1. Each week then starts at column 2 and spans
+// 15 CSV columns: Sets/Reps, Load x6, Tempo, Rest, Notes, then spacer cells.
+const FIRST_WEEK_OFFSET = 2;
+const COLS_PER_WEEK = 15;
 
 interface Exercise {
   id: string;
   name: string;
   sets: number;
-  reps: string;
+  reps: number;
+  repsText: string;
   tempo: string;
   rest: string;
   load: string[];
@@ -64,9 +66,32 @@ function parseCSV(csv: string): string[][] {
 }
 
 function extractVideoUrl(notes: string): string | undefined {
-  // Look for .MOV, .MP4, .HEIC patterns in notes
-  const match = notes.match(/([a-zA-Z0-9_.-]+\.(MOV|MP4|HEIC|mov|mp4|heic))/);
-  return match ? match[0] : undefined;
+  // Look for a file/path that ends in a supported media extension.
+  // Sheet notes often include spaces or folders, e.g. "book opener.MOV" or "SMR trap/shoulder.MOV".
+  const match = notes.match(/(?:^|[\s,;])([^\n,;]*?\.(?:MOV|MP4|HEIC))/i);
+  return match ? match[1].trim() : undefined;
+}
+
+function parseSetsReps(value: string): { sets: number; reps: number; repsText: string } {
+  const setsReps = value.trim();
+  const setsMatch = setsReps.match(/(\d+)\s*x/i);
+  const sets = setsMatch ? parseInt(setsMatch[1], 10) : 1;
+  const repsText = setsReps.replace(/^\d+\s*x/i, '').replace(/RM/i, ' RM').trim();
+  const repsMatch = repsText.match(/\d+/);
+  const reps = repsMatch ? parseInt(repsMatch[0], 10) : 1;
+
+  return { sets, reps, repsText };
+}
+
+function parseWeight(load: string[]): number | null {
+  for (const entry of load) {
+    const numeric = parseFloat(entry.replace(/[^\d.-]/g, ''));
+    if (!Number.isNaN(numeric)) {
+      return numeric;
+    }
+  }
+
+  return null;
 }
 
 async function fetchSheetData(): Promise<RawWorkout[]> {
@@ -94,29 +119,29 @@ async function fetchSheetData(): Promise<RawWorkout[]> {
 
   function parseExercise(row: string[], weekOffset: number, category: string): Exercise | null {
     const firstCell = (row[0] || '').trim();
+    const exerciseName = (row[1] || '').trim();
     if (!['I', 'II', 'III', 'IV'].includes(firstCell)) return null;
     if (!row[1] || row[1].trim() === '') return null;
 
-    const setsReps = row[1 + weekOffset] || '';
-    const setsMatch = setsReps.match(/(\d+)x/);
-    const sets = setsMatch ? parseInt(setsMatch[1]) : 1;
-    const reps = setsReps.replace(/^\d+x/, '').replace('RM', ' RM').trim();
+    const setsReps = row[weekOffset] || '';
+    if (!setsReps.trim()) return null;
+    const { sets, reps, repsText } = parseSetsReps(setsReps);
 
-    // Load columns: weekOffset+2, +3, +4, +5, +6 (5 load columns)
-    const loadStart = 2 + weekOffset;
-    const load = [row[loadStart], row[loadStart + 1], row[loadStart + 2], row[loadStart + 3], row[loadStart + 4]]
+    // Load columns: +1 through +6 in each week group
+    const loadStart = weekOffset + 1;
+    const load = [row[loadStart], row[loadStart + 1], row[loadStart + 2], row[loadStart + 3], row[loadStart + 4], row[loadStart + 5]]
       .filter(l => l && l.trim());
 
-    // Tempo is weekOffset + 8, Rest is weekOffset + 9, Notes is weekOffset + 10
-    const tempo = row[8 + weekOffset] || '';
-    const rest = row[9 + weekOffset] || '';
-    const notes = row[10 + weekOffset] || '';
+    const tempo = row[weekOffset + 7] || '';
+    const rest = row[weekOffset + 8] || '';
+    const notes = row[weekOffset + 9] || '';
 
     return {
       id: `e${++exerciseCounter}`,
-      name: row[1 + weekOffset] || '',
+      name: exerciseName,
       sets,
       reps,
+      repsText,
       tempo,
       rest,
       load,
@@ -168,7 +193,7 @@ async function fetchSheetData(): Promise<RawWorkout[]> {
 
     // Parse exercise for each week
     for (let week = 0; week < 5; week++) {
-      const weekOffset = week * COLS_PER_WEEK;
+      const weekOffset = FIRST_WEEK_OFFSET + week * COLS_PER_WEEK;
       const exercise = parseExercise(row, weekOffset, currentCategory);
       if (exercise) {
         currentWorkout.weekExercises[week].push(exercise);
@@ -219,16 +244,45 @@ async function migrate() {
     console.log(`System user exists: ${systemUser.email}`);
   }
 
+  const existingMembership = await prisma.organizationMember.findFirst({
+    where: {
+      organizationId: org.id,
+      userId: systemUser.id,
+    },
+  });
+
+  if (!existingMembership) {
+    await prisma.organizationMember.create({
+      data: {
+        organizationId: org.id,
+        userId: systemUser.id,
+        role: 'owner',
+      },
+    });
+  }
+
   // Create/find program
   let program = await prisma.program.findFirst({ 
     where: { name: PROGRAM_NAME, organizationId: org.id }
   });
   if (!program) {
     program = await prisma.program.create({
-      data: { name: PROGRAM_NAME, organizationId: org.id }
+      data: {
+        name: PROGRAM_NAME,
+        organizationId: org.id,
+        createdById: systemUser.id,
+        totalWeeks: 5,
+      }
     });
     console.log(`Created program: ${program.name}`);
   } else {
+    program = await prisma.program.update({
+      where: { id: program.id },
+      data: {
+        createdById: program.createdById || systemUser.id,
+        totalWeeks: program.totalWeeks || 5,
+      },
+    });
     console.log(`Program exists: ${program.name}`);
   }
 
@@ -264,20 +318,41 @@ async function migrate() {
       });
 
       // Create exercises
-      for (const ex of exercises) {
+      for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
+        const ex = exercises[exerciseIndex];
+        const exercise = await prisma.exercise.upsert({
+          where: {
+            id: ex.id,
+          },
+          update: {
+            name: ex.name,
+            category: ex.category || 'General',
+          },
+          create: {
+            id: ex.id,
+            name: ex.name,
+            category: ex.category || 'General',
+            muscleGroup: 'Unknown',
+            userId: systemUser.id,
+          },
+        });
+        const noteParts = [
+          ex.repsText ? `Reps: ${ex.repsText}` : null,
+          ex.tempo ? `Tempo: ${ex.tempo}` : null,
+          ex.rest ? `Rest: ${ex.rest}` : null,
+          ex.notes || null,
+        ].filter(Boolean);
+
         await prisma.workoutExercise.create({
           data: {
             workoutId: workout.id,
-            name: ex.name,
+            exerciseId: exercise.id,
             sets: ex.sets,
             reps: ex.reps,
-            tempo: ex.tempo,
-            rest: ex.rest,
-            load: ex.load.join(','),
-            notes: ex.notes,
+            weight: parseWeight(ex.load),
+            notes: noteParts.join(' | ') || null,
             videoUrl: ex.videoUrl,
-            category: ex.category,
-            orderIndex: exercises.indexOf(ex),
+            order: exerciseIndex,
           }
         });
         exerciseCount++;

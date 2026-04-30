@@ -42,6 +42,15 @@ interface SetLog {
   completed: boolean
 }
 
+interface PreviousSetLog {
+  workoutExerciseId: string
+  setNumber: number
+  weight: number | null
+  reps: number | null
+  completedAt: string | null
+  workoutName: string
+}
+
 interface WorkoutSessionViewProps {
   workout: WorkoutWithExercises
 }
@@ -58,6 +67,7 @@ function useDebounce<T>(value: T, delay: number): T {
 export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
   const router = useRouter()
   const [logs, setLogs] = React.useState<Map<string, SetLog>>(new Map())
+  const [previousLogs, setPreviousLogs] = React.useState<Map<string, PreviousSetLog>>(new Map())
   const [sessionId, setSessionId] = React.useState<string | null>(null)
   const [isSaving, setIsSaving] = React.useState(false)
   const [isCompleting, setIsCompleting] = React.useState(false)
@@ -76,6 +86,14 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
         if (!res.ok) return
         const data = await res.json()
         setSessionId(data.id)
+
+        if (data.previousSetLogs && data.previousSetLogs.length > 0) {
+          const previous = new Map<string, PreviousSetLog>()
+          for (const log of data.previousSetLogs) {
+            previous.set(`${log.workoutExerciseId}_${log.setNumber}`, log)
+          }
+          setPreviousLogs(previous)
+        }
 
         // Restore set logs from existing session
         if (data.setLogs && data.setLogs.length > 0) {
@@ -301,7 +319,11 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                     {Array.from({ length: we.sets }, (_, setIndex) => {
                       const key = `${we.id}_${setIndex}`
                       const log = logs.get(key)
+                      const previousLog = previousLogs.get(key)
                       const setComplete = log?.completed || false
+                      const previousText = previousLog
+                        ? `Last: ${previousLog.weight ?? "-"} x ${previousLog.reps ?? "-"}`
+                        : null
 
                       return (
                         <div
@@ -327,29 +349,36 @@ export function WorkoutSessionView({ workout }: WorkoutSessionViewProps) {
                           <span className="text-sm font-medium text-muted-foreground min-w-[50px]">
                             Set {setIndex + 1}
                           </span>
-                          <div className="flex flex-1 gap-2">
-                            <div className="flex-1">
-                              <Input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder={we.weight ? `${we.weight}` : "Weight"}
-                                value={log?.weight || ""}
-                                onChange={(e) => updateLog(we.id, setIndex, "weight", e.target.value)}
-                                className="h-8 text-sm"
-                                aria-label={`Set ${setIndex + 1} weight`}
-                              />
+                          <div className="flex flex-1 flex-col gap-1 sm:flex-row sm:items-center">
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder={previousLog?.weight != null ? String(previousLog.weight) : we.weight ? `${we.weight}` : "Weight"}
+                                  value={log?.weight || ""}
+                                  onChange={(e) => updateLog(we.id, setIndex, "weight", e.target.value)}
+                                  className="h-8 text-sm"
+                                  aria-label={`Set ${setIndex + 1} weight`}
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder={previousLog?.reps != null ? String(previousLog.reps) : `${we.reps}`}
+                                  value={log?.reps || ""}
+                                  onChange={(e) => updateLog(we.id, setIndex, "reps", e.target.value)}
+                                  className="h-8 text-sm"
+                                  aria-label={`Set ${setIndex + 1} reps`}
+                                />
+                              </div>
                             </div>
-                            <div className="flex-1">
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                placeholder={`${we.reps}`}
-                                value={log?.reps || ""}
-                                onChange={(e) => updateLog(we.id, setIndex, "reps", e.target.value)}
-                                className="h-8 text-sm"
-                                aria-label={`Set ${setIndex + 1} reps`}
-                              />
-                            </div>
+                            {previousText && (
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {previousText}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )

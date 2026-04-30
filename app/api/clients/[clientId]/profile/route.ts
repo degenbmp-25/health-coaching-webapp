@@ -52,12 +52,20 @@ export async function GET(
       client.coachId === user.id ||
       client.primaryTrainerId === user.id
 
-    // Check org role
-    const clientOrgRoles = client.organizationMemberships.map((m) => m.role)
-    const userIsOrgTrainer =
-      clientOrgRoles.includes("owner") || clientOrgRoles.includes("trainer")
+    const clientOrgIds = client.organizationMemberships.map((m) => m.organizationId)
+    const requesterOrgTrainer =
+      clientOrgIds.length > 0
+        ? await db.organizationMember.findFirst({
+            where: {
+              userId: user.id,
+              organizationId: { in: clientOrgIds },
+              role: { in: ["owner", "trainer"] },
+            },
+            select: { id: true },
+          })
+        : null
 
-    if (!isCoachOfClient && !userIsOrgTrainer) {
+    if (!isCoachOfClient && !requesterOrgTrainer) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 

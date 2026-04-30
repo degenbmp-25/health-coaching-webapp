@@ -2,7 +2,7 @@ import { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/session"
 
-import { getWorkout } from "@/lib/api/workouts"
+import { getExercises, getWorkout } from "@/lib/api/workouts"
 
 import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { Shell } from "@/components/layout/shell"
@@ -31,12 +31,7 @@ export default async function WorkoutEditPage({ params }: WorkoutEditPageProps) 
     notFound()
   }
 
-  // Fetch all exercises
-  const exercises = await db.exercise.findMany({
-    orderBy: {
-      name: 'asc',
-    },
-  })
+  const exercises = await getExercises(user.id)
 
   // Get user's organization membership and videos (for video selector)
   let organizationVideos: any[] = []

@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   description: "Track your meals and nutrition.",
 }
 
+export const dynamic = "force-dynamic"
+
 interface MealsPageProps {
   searchParams: { date?: string }
 }
@@ -87,4 +89,4 @@ export default async function MealsPage({ searchParams }: MealsPageProps) {
       </div>
     </Shell>
   )
-} 
+}

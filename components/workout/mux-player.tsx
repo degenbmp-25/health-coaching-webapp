@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icons } from '@/components/icons';
 
 interface VideoPlayerProps {
@@ -10,68 +10,58 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) {
-  const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasPlaybackError, setHasPlaybackError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Stream URL
-  const streamUrl = playbackId && playbackId.trim() !== ''
-    ? `https://stream.mux.com/${playbackId}.m3u8`
-    : null;
-
   useEffect(() => {
-    if (!streamUrl || !videoRef.current) return;
+    if (!playbackId || playbackId.trim() === '' || !videoRef.current) return;
 
     let hlsInstance: any = null;
     const video = videoRef.current;
+    const streamUrl = `https://stream.mux.com/${playbackId}.m3u8`;
 
-    const initVideo = async () => {
-      setIsLoading(true);
-      setHasError(false);
+    setHasPlaybackError(false);
 
-      // For Safari and modern browsers that support HLS natively
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = streamUrl;
-        video.addEventListener('loadedmetadata', () => setIsLoading(false));
-        video.addEventListener('error', () => setHasError(true));
-        return;
-      }
+    const handleError = () => setHasPlaybackError(true);
+    const handleCanPlay = () => setHasPlaybackError(false);
 
-      // For other browsers, use hls.js
-      try {
-        const Hls = (await import('hls.js')).default;
-        if (Hls.isSupported()) {
-          hlsInstance = new Hls({});
+    video.addEventListener('error', handleError);
+    video.addEventListener('canplay', handleCanPlay);
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = streamUrl;
+    } else {
+      import('hls.js')
+        .then(({ default: Hls }) => {
+          if (!Hls.isSupported()) {
+            setHasPlaybackError(true);
+            return;
+          }
+
+          hlsInstance = new Hls();
           hlsInstance.loadSource(streamUrl);
           hlsInstance.attachMedia(video);
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            setIsLoading(false);
-          });
-          hlsInstance.on(Hls.Events.ERROR, (event: any, data: any) => {
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => setHasPlaybackError(false));
+          hlsInstance.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean }) => {
             if (data.fatal) {
-              setHasError(true);
-              setIsLoading(false);
+              setHasPlaybackError(true);
             }
           });
-        } else {
-          setHasError(true);
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error('Error loading HLS:', err);
-        setHasError(true);
-        setIsLoading(false);
-      }
-    };
-
-    initVideo();
+        })
+        .catch(() => setHasPlaybackError(true));
+    }
 
     return () => {
+      video.removeEventListener('error', handleError);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeAttribute('src');
+      video.load();
+
       if (hlsInstance) {
         hlsInstance.destroy();
       }
     };
-  }, [streamUrl]);
+  }, [playbackId]);
 
   // Guard against empty playbackId
   if (!playbackId || playbackId.trim() === '') {
@@ -85,32 +75,32 @@ export function VideoPlayer({ playbackId, title, className }: VideoPlayerProps) 
     );
   }
 
-  if (hasError) {
-    return (
-      <div className="rounded-md border bg-muted/50 p-4">
-        <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
-          <Icons.clock className="h-8 w-8" />
-          <span>Video unavailable</span>
-          <span className="text-xs text-muted-foreground/70">Please try again later</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="rounded-md overflow-hidden border relative" style={{ aspectRatio: '16/9' }}>
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-10">
-          <Icons.spinner className="h-8 w-8 animate-spin" />
-        </div>
+    <div className="space-y-2">
+      <div className="rounded-md overflow-hidden border relative bg-black" style={{ aspectRatio: '16/9' }}>
+        <video
+          ref={videoRef}
+          controls
+          playsInline
+          preload="metadata"
+          poster={`https://image.mux.com/${playbackId}/thumbnail.jpg`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className={className}
+        >
+          {title || 'Workout video'}
+        </video>
+      </div>
+      {hasPlaybackError && (
+        <a
+          href={`https://stream.mux.com/${playbackId}.m3u8`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-xs text-primary hover:underline"
+        >
+          <Icons.externalLink className="h-3 w-3" />
+          Open demo video
+        </a>
       )}
-      <video
-        ref={videoRef}
-        controls
-        playsInline
-        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        className={className}
-      />
     </div>
   );
 }

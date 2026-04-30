@@ -1,6 +1,15 @@
 import { SiteConfig } from "@/types"
 
-import { env } from "@/env.mjs"
+const appUrl = process.env.NEXT_PUBLIC_APP_URL
+let siteUrl = "https://habithletics.vercel.app"
+
+if (appUrl) {
+  try {
+    siteUrl = new URL(appUrl).toString().replace(/\/$/, "")
+  } catch {
+    siteUrl = "https://habithletics.vercel.app"
+  }
+}
 
 export const siteConfig: SiteConfig = {
   name: "Habithletics",
@@ -19,11 +28,11 @@ export const siteConfig: SiteConfig = {
     "Monitor",
   ],
   url: {
-    base: env.NEXT_PUBLIC_APP_URL || "https://habithletics.vercel.app",
+    base: siteUrl,
     author: "https://redpangilinan.live",
   },
   links: {
     github: "https://github.com/redpangilinan/Habithletics",
   },
-  ogImage: `${env.NEXT_PUBLIC_APP_URL || "https://habithletics.vercel.app"}/og.jpg`,
+  ogImage: `${siteUrl}/og.jpg`,
 }

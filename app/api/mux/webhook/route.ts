@@ -1,28 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// Verify Mux webhook signature
+// Mux sends signatures as: t=timestamp,v1=signature.
 function verifyWebhookSignature(
-  body: string,
-  signature: string,
+  rawBody: string,
+  muxSignature: string,
   secret: string
 ): boolean {
   const crypto = require('crypto')
+  const parts = muxSignature.split(',')
+  let timestamp = ''
+  let signature = ''
+
+  for (const part of parts) {
+    if (part.startsWith('t=')) {
+      timestamp = part.substring(2)
+    } else if (part.startsWith('v1=')) {
+      signature = part.substring(3)
+    }
+  }
+
+  if (!timestamp || !signature) {
+    console.error('Invalid Mux signature format')
+    return false
+  }
+
+  const timestampSeconds = Number(timestamp)
+  const fiveMinutes = 5 * 60
+  const now = Math.floor(Date.now() / 1000)
+  if (!Number.isFinite(timestampSeconds) || Math.abs(now - timestampSeconds) > fiveMinutes) {
+    console.error('Mux signature timestamp is outside tolerance')
+    return false
+  }
+
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(body)
+    .update(`${timestamp}.${rawBody}`)
     .digest('hex')
-  return signature === expectedSignature
+
+  if (signature.length !== expectedSignature.length) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  )
 }
 
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
     const signature = request.headers.get('mux-signature')
-    const webhookSecret = process.env.MUX_WEBHOOK_SECRET
+    const webhookSecret = process.env.MUX_WEBHOOK_SECRET?.trim()
 
-    // Verify signature in production
-    if (process.env.NODE_ENV === 'production' && webhookSecret && signature) {
+    if (process.env.NODE_ENV === 'production') {
+      if (!webhookSecret || !signature) {
+        console.error('Mux webhook signature configuration is missing')
+        return NextResponse.json({ error: 'Webhook signature required' }, { status: 401 })
+      }
+
       if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
       }
@@ -35,7 +72,8 @@ export async function POST(request: NextRequest) {
     if (body.type === 'video.asset.ready') {
       const assetId = body.data.id
       const playbackId = body.data.playback_ids?.[0]?.id
-      const thumbnailUrl = body.data.thumbnail_urls?.[0]?.replace(/\?.*/, '') // Remove query params
+      const uploadId = body.data.upload_id
+      const thumbnailUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg` : null
       const duration = body.data.duration ? Math.floor(body.data.duration) : null
 
       if (!assetId) {
@@ -45,7 +83,12 @@ export async function POST(request: NextRequest) {
 
       // Find the OrganizationVideo with this asset ID
       const video = await db.organizationVideo.findFirst({
-        where: { muxAssetId: assetId }
+        where: {
+          OR: [
+            { muxAssetId: assetId },
+            ...(uploadId ? [{ muxAssetId: uploadId }] : []),
+          ],
+        },
       })
 
       if (!video) {
@@ -58,6 +101,7 @@ export async function POST(request: NextRequest) {
         where: { id: video.id },
         data: {
           muxPlaybackId: playbackId || null,
+          muxAssetId: assetId,
           thumbnailUrl: thumbnailUrl || null,
           duration: duration || null,
           status: 'ready'
@@ -71,9 +115,15 @@ export async function POST(request: NextRequest) {
     // Handle video.asset.errored event
     if (body.type === 'video.asset.errored') {
       const assetId = body.data.id
+      const uploadId = body.data.upload_id
 
       const video = await db.organizationVideo.findFirst({
-        where: { muxAssetId: assetId }
+        where: {
+          OR: [
+            { muxAssetId: assetId },
+            ...(uploadId ? [{ muxAssetId: uploadId }] : []),
+          ],
+        },
       })
 
       if (video) {
@@ -90,7 +140,9 @@ export async function POST(request: NextRequest) {
     // Handle video.upload.asset_created (alternative event from Mux)
     if (body.type === 'video.upload.asset_created') {
       const uploadId = body.data.id
-      const assetId = body.data.asset_id?.id
+      const assetId = typeof body.data.asset_id === 'string'
+        ? body.data.asset_id
+        : body.data.asset_id?.id
 
       if (uploadId) {
         // Find pending video with this upload ID as asset ID

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { getMuxCredentials } from '@/lib/mux'
 
 // PATCH /api/organizations/[id]/videos/[videoId] - Update video (rename)
 export async function PATCH(
@@ -15,12 +16,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 
@@ -74,12 +75,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify user is owner/trainer in this organization
+    // Verify user can manage videos in this organization
     const membership = await db.organizationMember.findFirst({
       where: {
         organizationId: orgId,
         userId: user.id,
-        role: { in: ['owner', 'trainer'] }
+        role: { in: ['owner', 'trainer', 'coach'] }
       }
     })
 
@@ -100,8 +101,7 @@ export async function DELETE(
     }
 
     // Delete from Mux (if we have a real asset ID)
-    const muxTokenId = process.env.MUX_TOKEN_ID
-    const muxTokenSecret = process.env.MUX_TOKEN_SECRET
+    const { tokenId: muxTokenId, tokenSecret: muxTokenSecret } = getMuxCredentials()
 
     if (muxTokenId && muxTokenSecret && video.muxAssetId) {
       const credentials = Buffer.from(`${muxTokenId}:${muxTokenSecret}`).toString('base64')

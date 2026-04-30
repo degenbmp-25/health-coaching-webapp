@@ -16,7 +16,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <nav className="container flex h-16 items-center justify-between">
+      <nav className="container flex h-16 items-center justify-between !px-4 sm:!px-6 lg:!px-8">
         {/* Logo */}
         <div className="flex items-center">
           <Link href="/" className="flex items-center space-x-2">
@@ -92,7 +92,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden border-b bg-background">
-          <div className="container py-4 space-y-4">
+          <div className="container space-y-4 py-4 !px-4 sm:!px-6 lg:!px-8">
             {navLinks.data.map((item, index) => (
               item.href && (
                 <Link

@@ -32,7 +32,7 @@ export function MobileNav({ items }: MobileNavProps) {
             <span className="sr-only">Toggle menu</span>
           </Button>
         </DialogTrigger>
-        <DialogContent className="w-80 max-w-80 p-0 left-4 translate-x-0">
+        <DialogContent className="left-4 w-[calc(100vw-2rem)] max-w-80 translate-x-0 p-0">
           <div className="flex flex-col h-full max-h-[80vh]">
             <div className="p-6 border-b">
               <h2 className="text-lg font-semibold">Navigation</h2>
@@ -69,4 +69,4 @@ export function MobileNav({ items }: MobileNavProps) {
       </Dialog>
     </div>
   )
-} 
+}

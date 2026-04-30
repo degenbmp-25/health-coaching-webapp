@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   description: "Manage your workout plans.",
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function WorkoutsPage() {
   const user = await getCurrentUser()
 

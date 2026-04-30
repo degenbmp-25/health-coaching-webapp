@@ -2,9 +2,9 @@ import { dashboardLinks, trainerLinks } from "@/config/links"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
 import Footer from "@/components/layout/footer"
+import { MobileSectionBar } from "@/components/layout/mobile-section-bar"
 import Navbar from "@/components/layout/navbar"
 import { DashboardNav } from "@/components/pages/dashboard/dashboard-nav"
-import { MobileNav } from "@/components/layout/mobile-nav"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -44,9 +44,10 @@ export default async function DashboardLayout({
     : dashboardLinks.data
 
   return (
-    <div className="flex min-h-screen flex-col space-y-6">
+    <div className="flex min-h-screen min-w-0 flex-col">
       <Navbar />
-      <div className="container grid flex-1 gap-4 md:gap-12 md:grid-cols-[200px_1fr]">
+      <MobileSectionBar items={mobileLinks} title="Dashboard" />
+      <div className="container mt-4 grid w-full max-w-full min-w-0 flex-1 grid-cols-1 gap-4 !px-0 md:mt-6 md:gap-12 md:grid-cols-[200px_minmax(0,1fr)]">
         <aside className="hidden w-[200px] flex-col md:flex">
           <DashboardNav items={dashboardLinks.data} />
           {canAccessTrainer && (
@@ -56,14 +57,13 @@ export default async function DashboardLayout({
             </div>
           )}
         </aside>
-        <main className="flex w-full flex-1 flex-col relative">
-          <div className="fixed top-20 left-4 z-50 md:hidden">
-            <MobileNav items={mobileLinks} />
-          </div>
+        <main className="relative flex w-full min-w-0 flex-1 flex-col">
           {children}
         </main>
       </div>
-      <Footer />
+      <div className="mt-6">
+        <Footer />
+      </div>
     </div>
   )
 }

@@ -6,8 +6,12 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 // Mux credentials
-const MUX_TOKEN_ID = 'f25cc1ef-9d85-4272-b06b-575c30293ebd';
-const MUX_TOKEN_SECRET = 'fSy3rIXRYrkrX5PhLFYPo0KFOuf2zJqICrFhLUjaep1kO/MlNWNZaEn0xtXdKz6H0k5AUpIuYin';
+const MUX_TOKEN_ID = process.env.MUX_TOKEN_ID?.trim();
+const MUX_TOKEN_SECRET = process.env.MUX_TOKEN_SECRET?.trim();
+
+if (!MUX_TOKEN_ID || !MUX_TOKEN_SECRET) {
+  throw new Error('Set MUX_TOKEN_ID and MUX_TOKEN_SECRET before running this script.');
+}
 
 const AUTH = Buffer.from(`${MUX_TOKEN_ID}:${MUX_TOKEN_SECRET}`).toString('base64');
 

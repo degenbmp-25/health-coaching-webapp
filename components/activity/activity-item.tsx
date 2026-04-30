@@ -17,18 +17,18 @@ interface ActivityItemProps {
 
 export function ActivityItem({ activity }: ActivityItemProps) {
   return (
-    <div className="flex items-center justify-between gap-2 p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4 md:min-w-[8rem]">
+    <div className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 items-center gap-4 md:min-w-[8rem]">
           <div
-            className="h-4 w-4 rounded-full shadow shadow-black dark:shadow-white"
+            className="h-4 w-4 shrink-0 rounded-full shadow shadow-black dark:shadow-white"
             data-testid="color-code"
             style={{ backgroundColor: `${activity.colorCode}` }}
           ></div>
-          <div>
+          <div className="min-w-0">
             <Link
               href={`/dashboard/activities/${activity.id}`}
-              className="font-semibold hover:underline"
+              className="break-words font-semibold hover:underline"
             >
               {activity.name}
             </Link>
@@ -40,12 +40,12 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           </div>
         </div>
         {activity.description ? (
-          <div className="text-sm text-muted-foreground">
+          <div className="break-words text-sm text-muted-foreground">
             {activity.description}
           </div>
         ) : null}
       </div>
-      <div className="flex flex-col gap-2 md:flex-row">
+      <div className="flex shrink-0 gap-2 sm:flex-col md:flex-row">
         <QuickLogButton
           activityId={activity.id}
           className="flex h-8 w-8 items-center justify-center rounded-md border transition-colors hover:bg-muted"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { db } from "@/lib/db"
+import { getExercises } from "@/lib/api/workouts"
 import { z } from "zod"
 
 const exerciseCreateSchema = z.object({
@@ -47,21 +48,11 @@ export async function GET(req: Request) {
     const authRes = await requireAuth();
     const currentUser = authRes instanceof NextResponse ? null : authRes;
 
-    const exercises = await db.exercise.findMany({
-      where: {
-        OR: [
-          { userId: null }, // Global exercises
-          { userId: currentUser?.id || undefined }, // User's custom exercises (if logged in)
-        ],
-      },
-      orderBy: [
-        { name: "asc" }, // Or by category, then name, etc.
-      ],
-    })
+    const exercises = await getExercises(currentUser?.id)
 
     return NextResponse.json(exercises)
   } catch (error) {
     console.error("[EXERCISES_GET]", error)
     return new NextResponse("Internal Server Error", { status: 500 })
   }
-} 
+}

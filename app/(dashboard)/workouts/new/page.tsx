@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { db } from "@/lib/db"
+import { getExercises } from "@/lib/api/workouts"
 import { getCurrentUser } from "@/lib/session"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 
@@ -13,12 +14,7 @@ export default async function NewWorkoutPage() {
     redirect("/signin")
   }
 
-  // Fetch all exercises
-  const exercises = await db.exercise.findMany({
-    orderBy: {
-      name: 'asc',
-    },
-  })
+  const exercises = await getExercises(user.id)
 
   // Get user's organization membership and videos (for video selector)
   let organizationVideos: any[] = []

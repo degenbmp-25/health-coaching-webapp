@@ -142,7 +142,12 @@ export function TrainerVideosClient({
       })
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video to Mux')
+        const errorText = await uploadResponse.text().catch(() => '')
+        throw new Error(
+          errorText
+            ? `Failed to upload video to Mux (${uploadResponse.status}): ${errorText}`
+            : `Failed to upload video to Mux (${uploadResponse.status})`
+        )
       }
 
       setUploadProgress('Processing video...')
@@ -261,9 +266,9 @@ export function TrainerVideosClient({
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
+    <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold">Video Library</h1>
           <p className="text-muted-foreground">
             Manage exercise demonstration videos for {organizationName}
@@ -277,7 +282,7 @@ export function TrainerVideosClient({
               Upload Video
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Upload New Video</DialogTitle>
               <DialogDescription>
@@ -321,7 +326,7 @@ export function TrainerVideosClient({
                 <Input
                   id="video-file"
                   type="file"
-                  accept="video/*,.mov,.mp4,.heic,.heif"
+                  accept="video/*,.mov,.mp4"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   disabled={isUploading}
                 />
@@ -493,7 +498,7 @@ function VideoCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-base truncate">{video.title}</CardTitle>
             <CardDescription className={statusColors[video.status as keyof typeof statusColors] || 'text-muted-foreground'}>
@@ -549,11 +554,11 @@ function VideoThumbnail({ video }: { video: OrganizationVideo }) {
     )
   }
 
-  if (video.thumbnailUrl) {
+  if (video.muxPlaybackId) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={video.thumbnailUrl}
+        src={`/api/mux/thumbnail/${encodeURIComponent(video.muxPlaybackId)}`}
         alt={video.title}
         className="h-16 w-24 object-cover rounded flex-shrink-0"
       />

@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: "Monitor your progress.",
 }
 
+export const dynamic = "force-dynamic"
+
 interface DashboardProps {
   searchParams: { from?: string; to?: string }
 }
@@ -60,7 +62,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
   }
 
   return (
-    <Shell className="pt-20 md:pt-0">
+    <Shell>
       <DashboardHeader heading="Dashboard" text="Monitor your progress.">
         <div className="hidden sm:block">
           <DateRangePicker />
@@ -70,7 +72,7 @@ export default async function Dashboard({ searchParams }: DashboardProps) {
       <div className="space-y-4 sm:space-y-6">
         <HabitLoggingPanel userId={userId} activities={activities} />
         
-        <div className="block sm:hidden px-4">
+        <div className="block sm:hidden">
           <DateRangePicker />
         </div>
         

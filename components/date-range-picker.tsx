@@ -36,16 +36,27 @@ export function DateRangePicker({
       : undefined
 
   const [date, setDate] = React.useState<DateRange | undefined>(dateRange)
+  const [showsWideCalendar, setShowsWideCalendar] = React.useState(false)
+
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)")
+    const updateCalendarWidth = () => setShowsWideCalendar(mediaQuery.matches)
+
+    updateCalendarWidth()
+    mediaQuery.addEventListener("change", updateCalendarWidth)
+
+    return () => mediaQuery.removeEventListener("change", updateCalendarWidth)
+  }, [])
 
   return (
-    <div className={cn("flex gap-1", className)}>
+    <div className={cn("flex w-full min-w-0 gap-1 sm:w-auto", className)}>
       <Popover>
         <PopoverTrigger asChild>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[16.25rem] justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal sm:w-[16.25rem]",
               !date && "text-muted-foreground"
             )}
           >
@@ -66,7 +77,7 @@ export function DateRangePicker({
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
+        <PopoverContent className="w-[calc(100vw-2rem)] p-0 sm:w-auto" align="end">
           <Calendar
             initialFocus
             mode="range"
@@ -76,7 +87,7 @@ export function DateRangePicker({
             }
             selected={date}
             onSelect={setDate}
-            numberOfMonths={2}
+            numberOfMonths={showsWideCalendar ? 2 : 1}
           />
           <div className="grid grid-cols-1 gap-2 px-2 pb-2 md:grid-cols-2">
             <PopoverClose

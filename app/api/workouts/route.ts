@@ -1,7 +1,14 @@
 import { z } from "zod"
+import type { Prisma } from "@prisma/client"
 
 import { getCurrentUser } from "@/lib/session"
 import { db } from "@/lib/db"
+
+const PROGRAM_WORKOUT_ORDER: Prisma.WorkoutOrderByWithRelationInput[] = [
+  { weekNumber: "asc" },
+  { dayOfWeek: "asc" },
+  { createdAt: "asc" },
+]
 
 const workoutCreateSchema = z.object({
   name: z.string().min(3, {
@@ -51,7 +58,7 @@ export async function GET(req: Request) {
             orderBy: { order: "asc" },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: PROGRAM_WORKOUT_ORDER,
       })
       return Response.json(workouts)
     }
@@ -88,7 +95,7 @@ export async function GET(req: Request) {
             orderBy: { order: "asc" },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: PROGRAM_WORKOUT_ORDER,
       })
     } else {
       // Client: get workouts from assigned programs only
@@ -112,7 +119,7 @@ export async function GET(req: Request) {
             orderBy: { order: "asc" },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: PROGRAM_WORKOUT_ORDER,
       })
     }
 

@@ -7,6 +7,7 @@ import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { Shell } from "@/components/layout/shell"
 import { DashboardHeader } from "@/components/pages/dashboard/dashboard-header"
 import { db } from "@/lib/db"
+import { getExercises } from "@/lib/api/workouts"
 
 export const metadata: Metadata = {
   title: "Edit Student Workout",
@@ -72,12 +73,7 @@ export default async function StudentWorkoutEditPage({ params }: StudentWorkoutE
     notFound()
   }
 
-  // Fetch all exercises
-  const exercises = await db.exercise.findMany({
-    orderBy: {
-      name: 'asc',
-    },
-  })
+  const exercises = await getExercises(user.id)
 
   // Get user's organization membership and videos (for video selector)
   let organizationVideos: any[] = []

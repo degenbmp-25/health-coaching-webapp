@@ -3,6 +3,7 @@ import { type Prisma } from "@prisma/client"
 
 import { WorkoutEditForm } from "@/components/workout/workout-edit-form"
 import { db } from "@/lib/db"
+import { getExercises } from "@/lib/api/workouts"
 
 interface WorkoutPageProps {
   params: {
@@ -32,12 +33,7 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
     notFound()
   }
 
-  // Fetch all exercises
-  const exercises = await db.exercise.findMany({
-    orderBy: {
-      name: 'asc',
-    },
-  })
+  const exercises = await getExercises(workout.userId)
 
   // Transform workout data for the form
   const workoutData = {
@@ -59,4 +55,4 @@ export default async function WorkoutPage({ params }: WorkoutPageProps) {
       <WorkoutEditForm workout={workoutData} exercises={exercises} />
     </div>
   )
-} 
+}

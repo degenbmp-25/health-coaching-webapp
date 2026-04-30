@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: "Track and manage your fitness goals.",
 }
 
+export const dynamic = "force-dynamic"
+
 async function getGoals(userId: string) {
   const goals = await db.goal.findMany({
     where: { userId },
@@ -42,4 +44,4 @@ export default async function GoalsPage() {
       <GoalsList goals={goals} />
     </Shell>
   )
-} 
+}

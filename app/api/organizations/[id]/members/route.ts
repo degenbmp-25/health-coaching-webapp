@@ -12,6 +12,7 @@ const routeContextSchema = z.object({
 const inviteMemberSchema = z.object({
   email: z.string().email(),
   role: z.enum(["owner", "trainer", "client"]),
+  primaryTrainerId: z.string().min(1).optional().nullable(),
 })
 
 const updateMemberSchema = z.object({
@@ -95,6 +96,13 @@ export async function POST(
     const json = await req.json()
     const body = inviteMemberSchema.parse(json)
 
+    if (["owner", "trainer"].includes(body.role) && membership.role !== "owner") {
+      return NextResponse.json(
+        { error: "Only organization owners can add trainers or owners" },
+        { status: 403 }
+      )
+    }
+
     const invitedUser = await db.user.findUnique({
       where: { email: body.email },
     })
@@ -106,6 +114,27 @@ export async function POST(
       )
     }
 
+    let primaryTrainerId: string | null = null
+    if (body.role === "client") {
+      primaryTrainerId = body.primaryTrainerId ?? user.id
+
+      const trainerMembership = await db.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: params.id,
+            userId: primaryTrainerId,
+          },
+        },
+      })
+
+      if (!trainerMembership || !["owner", "trainer"].includes(trainerMembership.role)) {
+        return NextResponse.json(
+          { error: "Primary trainer must be an owner or trainer in this organization" },
+          { status: 400 }
+        )
+      }
+    }
+
     const existingMembership = await db.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -113,11 +142,28 @@ export async function POST(
           userId: invitedUser.id,
         },
       },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+      },
     })
 
     if (existingMembership) {
+      if (body.role === "client" && existingMembership.role === "client") {
+        await db.user.update({
+          where: { id: invitedUser.id },
+          data: {
+            organizationRole: "client",
+            primaryTrainerId,
+          },
+        })
+
+        return NextResponse.json(existingMembership)
+      }
+
       return NextResponse.json(
-        { error: "User is already a member" },
+        { error: `User is already a ${existingMembership.role} in this organization` },
         { status: 409 }
       )
     }
@@ -139,9 +185,7 @@ export async function POST(
       where: { id: invitedUser.id },
       data: {
         organizationRole: body.role,
-        ...(body.role === "client" && membership.role === "trainer"
-          ? { primaryTrainerId: user.id }
-          : {}),
+        ...(body.role === "client" ? { primaryTrainerId } : {}),
       },
     })
 
